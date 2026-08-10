@@ -1,0 +1,1 @@
+Pin upstream icohangar-ops/meshcfo commit here once vendored.

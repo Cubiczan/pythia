@@ -1,0 +1,20 @@
+# Test strategy config for pythia-forge backtests.
+# Minimal flat format (no [strategy] wrapper) — the Backtester._load_strategy
+# accepts both wrapped and flat layouts.
+
+[mesh]
+analysts = ["politics", "crypto", "sports", "niche"]
+llm_model = "gpt-4o-mini"
+llm_temperature = 0.2
+
+[consensus]
+method = "logit-mean"
+agreement_threshold = 0.50
+min_analysts = 2
+
+[risk]
+sizing = "kelly-fractional"
+kelly_fraction = 0.25
+max_stake_per_market_usd = 50
+max_total_exposure_usd = 500
+max_drawdown_pct = 5

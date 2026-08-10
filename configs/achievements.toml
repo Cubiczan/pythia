@@ -1,0 +1,56 @@
+# Achievements config — P&L milestones that get logged + surfaced in the demo UI.
+# Each achievement has: id, name, description, condition (evaluated by pythia-observability).
+
+[[achievement]]
+id = "first_trade"
+name = "First Blood"
+description = "Place the first trade."
+condition = { type = "trade_count", op = ">=", value = 1 }
+
+[[achievement]]
+id = "ten_trades"
+name = "Warming Up"
+description = "Place 10 trades."
+condition = { type = "trade_count", op = ">=", value = 10 }
+
+[[achievement]]
+id = "first_win"
+name = "In the Black"
+description = "Close the first winning trade."
+condition = { type = "win_count", op = ">=", value = 1 }
+
+[[achievement]]
+id = "streak_3"
+name = "Hot Hand"
+description = "3 consecutive winning trades."
+condition = { type = "win_streak", op = ">=", value = 3 }
+
+[[achievement]]
+id = "pnl_plus_50"
+name = "Plus Fifty"
+description = "Reach +$50 in realized P&L."
+condition = { type = "realized_pnl_usd", op = ">=", value = 50 }
+
+[[achievement]]
+id = "pnl_plus_100"
+name = "Triple Digits"
+description = "Reach +$100 in realized P&L."
+condition = { type = "realized_pnl_usd", op = ">=", value = 100 }
+
+[[achievement]]
+id = "calibrated"
+name = "Calibrated Oracle"
+description = "Maintain Brier score < 0.20 across 20+ resolved trades."
+condition = { type = "brier_score", op = "<=", value = 0.20, min_trades = 20 }
+
+[[achievement]]
+id = "survivor"
+name = "Survivor"
+description = "Stay above 95% of peak bankroll for 7 days."
+condition = { type = "drawdown_pct", op = "<=", value = 5, days = 7 }
+
+[[achievement]]
+id = "niche_master"
+name = "Niche Master"
+description = "Win 3 subjective/niche markets."
+condition = { type = "wins_in_category", op = ">=", value = 3, category = "subjective" }

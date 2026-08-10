@@ -1,0 +1,122 @@
+[
+  {
+    "market_id": "dphi_001",
+    "question": "Will Trump win the 2025 GOP presidential primary?",
+    "category": "politics",
+    "opened_at": "2025-10-01T00:00:00Z",
+    "closed_at": "2025-12-15T23:59:59Z",
+    "settled_at": "2025-12-16T00:05:00Z",
+    "yes_price_at_open": 0.62,
+    "final_outcome": "YES",
+    "volume_usd": 250000,
+    "arbiter_model": "gpt-4o"
+  },
+  {
+    "market_id": "dphi_002",
+    "question": "Will Bitcoin close above $100,000 on 2025-12-31?",
+    "category": "crypto",
+    "opened_at": "2025-10-01T00:00:00Z",
+    "closed_at": "2025-12-31T23:59:59Z",
+    "settled_at": "2026-01-01T00:05:00Z",
+    "yes_price_at_open": 0.42,
+    "final_outcome": "NO",
+    "volume_usd": 125000,
+    "arbiter_model": "gpt-4o"
+  },
+  {
+    "market_id": "dphi_003",
+    "question": "Will the Fed cut interest rates at the September 2025 FOMC meeting?",
+    "category": "politics",
+    "opened_at": "2025-08-15T00:00:00Z",
+    "closed_at": "2025-09-17T18:00:00Z",
+    "settled_at": "2025-09-17T19:00:00Z",
+    "yes_price_at_open": 0.68,
+    "final_outcome": "YES",
+    "volume_usd": 89000,
+    "arbiter_model": "claude-3.5-sonnet"
+  },
+  {
+    "market_id": "dphi_004",
+    "question": "Will the Kansas City Chiefs win Super Bowl LX (February 2026)?",
+    "category": "sports",
+    "opened_at": "2025-09-08T00:00:00Z",
+    "closed_at": "2026-02-08T23:00:00Z",
+    "settled_at": "2026-02-09T01:00:00Z",
+    "yes_price_at_open": 0.28,
+    "final_outcome": "NO",
+    "volume_usd": 175000,
+    "arbiter_model": "gpt-4o"
+  },
+  {
+    "market_id": "dphi_005",
+    "question": "Will OpenAI release GPT-5 before 2026-06-30?",
+    "category": "subjective",
+    "opened_at": "2025-10-15T00:00:00Z",
+    "closed_at": "2026-06-29T23:59:59Z",
+    "settled_at": "2026-06-30T00:05:00Z",
+    "yes_price_at_open": 0.55,
+    "final_outcome": "YES",
+    "volume_usd": 64000,
+    "arbiter_model": "gpt-4o"
+  },
+  {
+    "market_id": "dphi_006",
+    "question": "Will ETH flip BTC in total market cap by end of 2025?",
+    "category": "crypto",
+    "opened_at": "2025-10-01T00:00:00Z",
+    "closed_at": "2025-12-31T23:59:59Z",
+    "settled_at": "2026-01-01T00:05:00Z",
+    "yes_price_at_open": 0.18,
+    "final_outcome": "NO",
+    "volume_usd": 42000,
+    "arbiter_model": "claude-3.5-sonnet"
+  },
+  {
+    "market_id": "dphi_007",
+    "question": "Will the 2025 NBA Finals go to a Game 7?",
+    "category": "sports",
+    "opened_at": "2025-05-15T00:00:00Z",
+    "closed_at": "2025-06-22T23:59:59Z",
+    "settled_at": "2025-06-23T00:05:00Z",
+    "yes_price_at_open": 0.35,
+    "final_outcome": "NO",
+    "volume_usd": 58000,
+    "arbiter_model": "gpt-4o"
+  },
+  {
+    "market_id": "dphi_008",
+    "question": "Will the EU AI Act take full effect before 2026-08-01?",
+    "category": "subjective",
+    "opened_at": "2025-09-01T00:00:00Z",
+    "closed_at": "2026-07-31T23:59:59Z",
+    "settled_at": "2026-08-01T00:05:00Z",
+    "yes_price_at_open": 0.71,
+    "final_outcome": "YES",
+    "volume_usd": 31000,
+    "arbiter_model": "gpt-4o"
+  },
+  {
+    "market_id": "dphi_009",
+    "question": "Will Trump's presidential approval rating exceed 50% in January 2026?",
+    "category": "politics",
+    "opened_at": "2025-11-15T00:00:00Z",
+    "closed_at": "2026-01-31T23:59:59Z",
+    "settled_at": "2026-02-01T00:05:00Z",
+    "yes_price_at_open": 0.44,
+    "final_outcome": "NO",
+    "volume_usd": 77000,
+    "arbiter_model": "claude-3.5-sonnet"
+  },
+  {
+    "market_id": "dphi_010",
+    "question": "Will the 2024 Bitcoin halving push BTC above $150,000 during 2025?",
+    "category": "crypto",
+    "opened_at": "2025-01-15T00:00:00Z",
+    "closed_at": "2025-12-31T23:59:59Z",
+    "settled_at": "2026-01-01T00:05:00Z",
+    "yes_price_at_open": 0.31,
+    "final_outcome": "NO",
+    "volume_usd": 198000,
+    "arbiter_model": "gpt-4o"
+  }
+]

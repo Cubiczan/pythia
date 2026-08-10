@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pythia-observability"
+version = "0.1.0"
+description = "Replay UI + achievements layer for the Pythia mesh — wraps icohangar-ops/agent-observability and icohangar-ops/achievements."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "icohangar-ops / Impactquadrant" },
+]
+keywords = [
+    "delphi",
+    "gensyn",
+    "prediction-market",
+    "observability",
+    "audit-trail",
+    "achievements",
+    "replay",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Framework :: FastAPI",
+]
+dependencies = [
+    "pydantic>=2.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "jinja2>=3.1",
+    "tomli>=2.0; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+pythia-replay = "pythia_observability.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/icohangar-ops/pythia"
+Documentation = "https://github.com/icohangar-ops/pythia/blob/main/docs/ARCHITECTURE.md"
+Repository = "https://github.com/icohangar-ops/pythia"
+Issues = "https://github.com/icohangar-ops/pythia/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pythia_observability"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/pythia_observability/templates" = "pythia_observability/templates"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v --tb=short"
+asyncio_mode = "auto"

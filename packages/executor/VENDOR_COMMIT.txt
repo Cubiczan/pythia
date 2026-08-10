@@ -1,0 +1,9 @@
+Pin upstream icohangar-ops/metabocommand commit here once vendored.
+
+Vendoring pattern:
+  - Drop the upstream repo into vendor/metabocommand/
+  - Set UPSTREAM_COMMIT_SHA below to the pinned commit hash.
+  - Re-run the test suite against the vendored copy.
+
+UPSTREAM_COMMIT_SHA=TODO
+UPSTREAM_REPO=https://github.com/icohangar-ops/metabocommand

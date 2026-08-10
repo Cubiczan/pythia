@@ -1,0 +1,1 @@
+Not vendored — this is new code. See README for ATT dependency.

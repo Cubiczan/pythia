@@ -1,0 +1,16 @@
+Pin upstream icohangar-ops/consensus-hardening-protocol commit here once vendored.
+
+Expected layout (Pattern 1 — vendored copy):
+    vendor/consensus_hardening_protocol/__init__.py
+    vendor/consensus_hardening_protocol/signed_decision.py
+    ...
+
+Or (Pattern 2 — nested submodule):
+    git submodule add git@github.com:icohangar-ops/consensus-hardening-protocol.git vendor/consensus-hardening-protocol
+
+After vendoring, record the pinned commit SHA on the line below so that
+the audit trail is reproducible:
+
+UPSTREAM_COMMIT_SHA=TODO
+UPSTREAM_REPO=icohangar-ops/consensus-hardening-protocol
+UPSTREAM_DATE=TODO

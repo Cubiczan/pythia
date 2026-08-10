@@ -1,0 +1,22 @@
+Pin upstream icohangar-ops/strata commit here once vendored.
+
+Expected layout (Pattern 1 — vendored copy):
+    vendor/strata/__init__.py
+    vendor/strata/ingest.py
+    ...
+
+Or (Pattern 2 — nested submodule):
+    git submodule add git@github.com:icohangar-ops/strata.git vendor/strata
+
+After vendoring, record the pinned commit SHA on the line below so the
+ingestion lineage (which upstream primitives were used to build a given
+MarketContext) is reproducible:
+
+UPSTREAM_COMMIT_SHA=TODO
+UPSTREAM_REPO=icohangar-ops/strata
+UPSTREAM_DATE=TODO
+
+NOTE: pythia-strata also depends on pythia-delphi-adapter for the Market type
+and pythia-analyst-mesh for the MarketContext type. Those are sibling Pythia
+sub-repos, not vendored upstreams — they are normal Python dependencies
+declared in pyproject.toml.

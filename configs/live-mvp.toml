@@ -1,0 +1,59 @@
+[delphi]
+api_key_env = "DELPHI_API_KEY"
+endpoint = "https://api.delphi.gensyn.ai"
+poll_interval_sec = 60
+archive_settled_after_sec = 86400
+
+[mesh]
+analysts = ["politics", "crypto", "sports", "niche"]
+llm_provider = "openai"
+llm_model = "gpt-4o-mini"
+llm_api_key_env = "LLM_API_KEY"
+llm_temperature = 0.2
+llm_max_tokens = 800
+analyst_timeout_sec = 30
+
+[consensus]
+method = "logit-mean"
+agreement_threshold = 0.65
+min_analysts = 2
+
+[consensus.weights]
+politics = 1.0
+crypto = 1.2
+sports = 0.8
+niche = 1.0
+
+[risk]
+sizing = "kelly-fractional"
+kelly_fraction = 0.25
+max_stake_per_market_usd = 50
+max_total_exposure_usd = 500
+max_drawdown_pct = 5
+cool_down_min_after_loss = 30
+
+[risk.market_type_rules]
+politics = { max_stake_usd = 50, allowed = true }
+crypto = { max_stake_usd = 40, allowed = true }
+sports = { max_stake_usd = 20, allowed = true }
+niche = { max_stake_usd = 30, allowed = true }
+subjective = { max_stake_usd = 25, allowed = true }
+
+[executor]
+mode = "paper"
+signing_key_env = "DELPHI_SIGNING_KEY"
+idempotency_enabled = true
+retry_max = 3
+retry_backoff_sec = 5
+
+[observability]
+audit_log_path = "./logs/audit.jsonl"
+replay_ui_enabled = true
+replay_ui_port = 8088
+achievements_enabled = true
+achievements_config = "configs/achievements.toml"
+
+[forge]
+historical_markets_path = "./data/resolved-markets/"
+backtest_starting_capital_usd = 1000
+backtest_strategy = "configs/strategies/ensemble-v1.toml"

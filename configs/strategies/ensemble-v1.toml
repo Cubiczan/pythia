@@ -1,0 +1,31 @@
+# Strategy config for pythia-forge backtests.
+# This defines a *strategy* = mesh config + consensus config + risk config,
+# frozen for reproducibility against historical resolved Delphi markets.
+
+[strategy]
+name = "ensemble-v1"
+description = "4-analyst mesh (politics+crypto+sports+niche), logit-mean consensus, quarter-Kelly."
+version = "1.0.0"
+
+[strategy.mesh]
+analysts = ["politics", "crypto", "sports", "niche"]
+llm_model = "gpt-4o-mini"
+llm_temperature = 0.2
+
+[strategy.consensus]
+method = "logit-mean"
+agreement_threshold = 0.65
+min_analysts = 2
+
+[strategy.risk]
+sizing = "kelly-fractional"
+kelly_fraction = 0.25
+max_stake_per_market_usd = 50
+max_total_exposure_usd = 500
+max_drawdown_pct = 5
+
+[backtest]
+starting_capital_usd = 1000
+markets_filter = { categories = ["politics", "crypto", "sports", "subjective"], min_volume_usd = 1000 }
+# Skip markets resolved within X seconds of opening (likely trivial).
+min_market_lifetime_sec = 3600

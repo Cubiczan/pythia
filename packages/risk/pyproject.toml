@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pythia-risk"
+version = "0.1.0"
+description = "Delphi-specific risk gating (Kelly sizing, exposure caps, drawdown breaker) wrapping icohangar-ops/meshcfo."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "icohangar-ops / Impactquadrant" },
+]
+keywords = ["delphi", "gensyn", "prediction-market", "kelly-criterion", "risk", "meshcfo"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+    "pydantic>=2.0",
+    "numpy>=1.26",
+    "tomli>=2.0; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[project.scripts]
+pythia-risk = "pythia_risk.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/icohangar-ops/pythia"
+Documentation = "https://github.com/icohangar-ops/pythia/blob/main/docs/ARCHITECTURE.md"
+Repository = "https://github.com/icohangar-ops/pythia"
+Issues = "https://github.com/icohangar-ops/pythia/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pythia_risk"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v --tb=short"
