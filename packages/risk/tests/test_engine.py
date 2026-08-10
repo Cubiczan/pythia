@@ -65,6 +65,7 @@ def _decision(prob: float = 0.72, market_id: str = "mkt-1") -> ConsensusDecision
         gate="trade",
         contributor_ids=["politics", "crypto", "niche"],
         method="logit-mean",
+        weights_used={"politics": 1.0, "crypto": 1.0, "niche": 1.0},
         timestamp="2026-08-10T12:00:00Z",
     )
 

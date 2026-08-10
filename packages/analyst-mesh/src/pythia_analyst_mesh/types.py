@@ -70,6 +70,12 @@ class MarketContext(BaseModel):
     Constructed by ``pythia-delphi-adapter`` (raw Delphi read) and enriched
     by ``pythia-strata`` (news, on-chain, social). This is the only thing
     an analyst sees about the market.
+
+    Supports multi-outcome LMSR markets: ``outcomes`` is the list of outcome
+    labels and ``spot_prices`` is the per-outcome price array (same length).
+    For backward compatibility with binary markets, ``current_yes_price``
+    and ``current_no_price`` are kept as convenience fields (they mirror
+    ``spot_prices[0]`` and ``spot_prices[1]`` for YES/NO markets).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -78,6 +84,15 @@ class MarketContext(BaseModel):
     question: str = Field(..., min_length=1)
     category: str = Field(..., min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    outcomes: list[str] = Field(
+        default_factory=lambda: ["YES", "NO"],
+        description="Outcome labels (e.g. ['YES', 'NO'] or ['BTC', 'ETH', 'SOL'])",
+    )
+    spot_prices: list[float] = Field(
+        default_factory=list,
+        description="Per-outcome spot prices (implied probabilities, 0..1)",
+    )
+    # Legacy convenience fields for binary markets.
     current_yes_price: float | None = Field(default=None, ge=0.0, le=1.0)
     current_no_price: float | None = Field(default=None, ge=0.0, le=1.0)
     volume_usd: float | None = Field(default=None, ge=0.0)

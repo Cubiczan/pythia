@@ -3,10 +3,10 @@
 Wraps icohangar-ops/metabocommand and stitches the four sibling Pythia
 sub-repos into a single end-to-end pipeline:
 
-    Delphi market → analyst-mesh → consensus → risk → sign → ATT order → TradeReceipt
-                                                                              │
-                                                                              ▼
-                                                                     signed JSONL audit log
+    Delphi market → analyst-mesh → consensus → risk → sign → SDK buy_shares → TradeReceipt
+                                                                                │
+                                                                                ▼
+                                                                       signed JSONL audit log
 
 Public API
 ----------
@@ -89,11 +89,10 @@ async def run_pipeline(
     mesh_cfg = toml_cfg.get("mesh", {})
 
     api_key = os.environ.get(
-        delphi_cfg.get("api_key_env", "DELPHI_API_KEY"), ""
+        delphi_cfg.get("api_key_env", "DELPHI_API_ACCESS_KEY"), ""
     )
-    endpoint = delphi_cfg.get("endpoint", "https://api.delphi.gensyn.ai")
 
-    delphi_client = DelphiClient(api_key=api_key or "stub", endpoint=endpoint)
+    delphi_client = DelphiClient()
     try:
         analyst_slugs = analysts or mesh_cfg.get("analysts", ["politics", "crypto"])
         llm_config = LLMConfig(
@@ -151,4 +150,4 @@ async def run_pipeline(
 
         return await executor.run_for_market(market_id)
     finally:
-        await delphi_client.aclose()
+        await delphi_client.stop()

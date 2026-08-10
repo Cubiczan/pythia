@@ -11,13 +11,18 @@ Public API:
 
 Submodules:
     types           — pydantic models + ConsensusDecision re-export.
-    sizing          — Kelly criterion for binary-outcome markets.
+    sizing          — Kelly criterion for multi-outcome LMSR markets.
     engine          — RiskEngine implementation.
     cli             — `pythia-risk` command-line entry point.
 """
 
 from pythia_risk.engine import RiskEngine
-from pythia_risk.sizing import kelly_fraction, size_trade_fixed, size_trade_kelly
+from pythia_risk.sizing import (
+    kelly_fraction,
+    size_trade_fixed,
+    size_trade_kelly,
+    size_trade_kelly_multi,
+)
 from pythia_risk.types import (
     BankrollState,
     ConsensusDecision,
@@ -43,6 +48,7 @@ __all__ = [
     "SizingMethod",
     "kelly_fraction",
     "size_trade_kelly",
+    "size_trade_kelly_multi",
     "size_trade_fixed",
     "size_trade",
     "__version__",

@@ -54,29 +54,32 @@ def _make_market(
     volume_usd: float = 12_345.67,
     closes_at: str | None = "2026-01-31T23:59:59+00:00",
 ) -> Market:
-    """Build a Market using whichever definition is in scope.
+    """Build a Market compatible with the adapter's new SDK-based schema.
 
-    Works whether or not ``pythia_delphi_adapter`` is installed:
+    The adapter's Market now mirrors the @gensyn-ai/gensyn-delphi-sdk Market
+    type, which uses camelCase aliases (id, appMarketId, marketUrl, etc.)
+    and requires deployer + created_at fields.
 
-    - If installed, ``Market`` is the adapter's pydantic model — which
-      requires ``status`` and ``created_at`` fields (we provide sensible
-      defaults so the test fixture works without callers having to know).
-    - If not installed, ``Market`` is the local fallback in
-      ``pythia_strata.types``, which uses ``extra="allow"`` so the extra
-      ``status`` / ``created_at`` keys are simply ignored.
+    For the strata enricher tests, we only care about market_id, question,
+    category, spot_prices, and closes_at — the rest are filled with sensible
+    defaults so the pydantic validation passes.
     """
     return Market.model_validate(
         {
-            "market_id": market_id,
-            "question": question,
-            "category": category,
-            "status": "OPEN",
-            "yes_price": yes_price,
-            "no_price": no_price,
-            "volume_usd": volume_usd,
-            "liquidity_usd": 5_000.0,
-            "created_at": "2026-01-15T00:00:00+00:00",
-            "closes_at": closes_at,
+            "id": market_id,
+            "appMarketId": f"app-{market_id}",
+            "marketUrl": f"https://testnet.delphi.fyi/m/app-{market_id}",
+            "status": "open",
+            "category": category.lower(),
+            "deployer": "0xfeed0000000000000000000000000000000000fd",
+            "createdAt": "2026-01-15T00:00:00+00:00",
+            "settlesAt": closes_at,
+            "metadata": {
+                "question": question,
+                "outcomes": ["YES", "NO"],
+            },
+            "spotPrices": [yes_price, no_price],
+            "spotImpliedProbabilities": [yes_price, no_price],
         }
     )
 
@@ -106,12 +109,14 @@ class TestEnrichWithStubs:
         enriched = await enricher.enrich(market)
 
         assert isinstance(enriched, EnrichedMarket)
-        assert enriched.market_id == market.market_id
+        assert enriched.market_id == market.market_address
         assert enriched.question == market.question
-        assert enriched.category == "CRYPTO"
+        assert enriched.category == "crypto"
         assert enriched.current_yes_price == 0.42
         assert enriched.current_no_price == 0.58
-        assert enriched.volume_usd == 12_345.67
+        # volume_usd is not in the new adapter Market schema (SDK doesn't expose it)
+        # — the enricher sets it to None when unavailable.
+        assert enriched.volume_usd is None
         assert enriched.closes_at == "2026-01-31T23:59:59+00:00"
         # All three strata are empty (stub providers return []).
         assert enriched.news == []
@@ -146,7 +151,7 @@ class TestEnrichWithStubs:
             social=SocialProvider(),
         )
         enriched = await enricher.enrich(market)
-        assert enriched.category == "POLITICS"
+        assert enriched.category == "politics"
         assert enriched.on_chain == []
         # News and social still attempted (returned [] by stubs).
         assert enriched.news == []
@@ -447,7 +452,7 @@ class TestSoftFail:
         )
         enriched = await enricher.enrich(market)
         assert isinstance(enriched, EnrichedMarket)
-        assert enriched.market_id == market.market_id
+        assert enriched.market_id == market.market_address
         assert enriched.news == []
         assert enriched.on_chain == []
         assert enriched.social == []
@@ -492,7 +497,7 @@ class TestCoerceToList:
 class TestCategoryStr:
     def test_plain_string(self) -> None:
         m = _make_market(category="CRYPTO")
-        assert _category_str(m) == "CRYPTO"
+        assert _category_str(m) == "crypto"
 
     def test_none_category_returns_other(self) -> None:
         # Build a duck-typed Market-like object whose category is None.
@@ -506,14 +511,12 @@ class TestCategoryStr:
         assert _category_str(FakeMarket()) == "OTHER"  # type: ignore[arg-type]
 
     def test_enum_value_extracted(self) -> None:
-        # When pythia_delphi_adapter is installed, Market.category is a
-        # MarketCategory enum (str, Enum). _category_str should return
-        # the .value, not the repr.
+        # The new adapter Market.category is a plain string (lowercase, from the SDK).
+        # _category_str returns it as-is.
         m = _make_market(category="CRYPTO")
         result = _category_str(m)
-        # Either "CRYPTO" (string passthrough) or the enum's .value="CRYPTO"
-        # — both are acceptable as long as it's the plain string.
-        assert result == "CRYPTO"
+        # The new SDK uses lowercase category strings.
+        assert result == "crypto"
 
 class TestClosesAtStr:
     def test_string_passthrough(self) -> None:

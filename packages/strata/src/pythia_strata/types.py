@@ -46,10 +46,6 @@ except Exception:  # noqa: BLE001 - we want to swallow any import failure
         Source of truth lives in ``pythia_delphi_adapter.models.Market``;
         this is a faithful but minimal mirror so pythia-strata can be
         developed in isolation before the adapter is vendored.
-
-        ``MarketEnricher.enrich`` only reads ``market_id`` / ``question`` /
-        ``category`` / ``yes_price`` / ``no_price`` / ``volume_usd`` /
-        ``closes_at`` from a Market, so the mirror below is sufficient.
         """
 
         model_config = ConfigDict(extra="allow")
@@ -57,8 +53,10 @@ except Exception:  # noqa: BLE001 - we want to swallow any import failure
         market_id: str
         question: str
         category: str = "OTHER"
-        yes_price: float = Field(default=0.5, ge=0.0, le=1.0)
-        no_price: float = Field(default=0.5, ge=0.0, le=1.0)
+        outcomes: list[str] = Field(default_factory=lambda: ["YES", "NO"])
+        spot_prices: list[float] = Field(default_factory=list)
+        yes_price: float | None = Field(default=None, ge=0.0, le=1.0)
+        no_price: float | None = Field(default=None, ge=0.0, le=1.0)
         volume_usd: float = Field(default=0.0, ge=0.0)
         closes_at: str | None = None
 
@@ -80,10 +78,6 @@ except Exception:  # noqa: BLE001 - we want to swallow any import failure
         ``pythia_analyst_mesh.types.MarketContext``; this is a faithful
         but minimal mirror so pythia-strata can be developed and tested
         in isolation before the mesh is vendored.
-
-        The real model uses ``ConfigDict(extra="forbid")``; we use
-        ``extra="allow"`` here so that small schema drift between this
-        fallback and the real type doesn't break tests.
         """
 
         model_config = ConfigDict(extra="allow")
@@ -92,6 +86,8 @@ except Exception:  # noqa: BLE001 - we want to swallow any import failure
         question: str = Field(..., min_length=1)
         category: str = Field(..., min_length=1)
         metadata: dict[str, Any] = Field(default_factory=dict)
+        outcomes: list[str] = Field(default_factory=lambda: ["YES", "NO"])
+        spot_prices: list[float] = Field(default_factory=list)
         current_yes_price: float | None = Field(default=None, ge=0.0, le=1.0)
         current_no_price: float | None = Field(default=None, ge=0.0, le=1.0)
         volume_usd: float | None = Field(default=None, ge=0.0)
@@ -241,37 +237,10 @@ class SocialSignal(BaseModel):
 class EnrichedMarket(BaseModel):
     """A Delphi market plus its three strata of enrichment context.
 
-    This is the internal aggregate ``MarketEnricher.enrich`` produces.
-    It is *not* the contract the analyst mesh consumes — that's
-    ``MarketContext``, which is produced from an ``EnrichedMarket`` via
-    ``MarketEnricher.to_market_context``. The split exists so callers
-    can inspect the raw enrichment payloads (e.g. for debugging or for
-    the audit log) without losing the original Delphi market data.
-
-    Attributes
-    ----------
-    market_id, question, category:
-        Copied from the source ``Market``. ``category`` is preserved as
-        a raw string (not the ``MarketCategory`` enum) so this model
-        stays decoupled from ``pythia_delphi_adapter`` when the adapter
-        isn't vendored.
-    current_yes_price, current_no_price:
-        Current Delphi prices (0..1). Renamed from ``yes_price`` /
-        ``no_price`` on the source ``Market`` to match the
-        ``MarketContext`` field names — the analyst mesh reads these
-        specifically.
-    volume_usd:
-        Market lifetime volume in USD.
-    closes_at:
-        ISO 8601 timestamp the market stops accepting orders. ``None``
-        if the market has no close time.
-    news, on_chain, social:
-        The three enrichment strata. Each is a list of the corresponding
-        pydantic model. Always present (possibly empty) — never ``None``.
-    enriched_at:
-        ISO 8601 timestamp marking when this enrichment pass completed.
-        Used for staleness checks downstream (don't trade on enrichment
-        older than X minutes).
+    Supports multi-outcome LMSR markets: ``outcomes`` is the list of outcome
+    labels and ``spot_prices`` is the per-outcome price array.
+    For backward compatibility, ``current_yes_price`` / ``current_no_price"
+    are kept as convenience fields for binary markets.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -279,6 +248,8 @@ class EnrichedMarket(BaseModel):
     market_id: str = Field(..., min_length=1)
     question: str = Field(..., min_length=1)
     category: str = Field(..., min_length=1)
+    outcomes: list[str] = Field(default_factory=lambda: ["YES", "NO"])
+    spot_prices: list[float] = Field(default_factory=list)
     current_yes_price: float | None = Field(default=None, ge=0.0, le=1.0)
     current_no_price: float | None = Field(default=None, ge=0.0, le=1.0)
     volume_usd: float | None = Field(default=None, ge=0.0)

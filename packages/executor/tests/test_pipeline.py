@@ -1,8 +1,8 @@
 """Pipeline tests for PythiaExecutor.
 
 All four sibling components (DelphiClient, BaseAnalyst, ConsensusEngine,
-RiskEngine) are replaced with in-test stubs so no real ATT / LLM calls
-are made. Each test exercises one branch of the 12-step pipeline.
+RiskEngine) are replaced with in-test stubs so no real SDK / LLM calls
+are made. Each test exercises one branch of the pipeline.
 """
 
 from __future__ import annotations
@@ -16,12 +16,7 @@ import pytest
 from pythia_analyst_mesh import Estimate, MarketContext
 from pythia_consensus import ConsensusConfig, ConsensusDecision
 from pythia_delphi_adapter import Market as AdapterMarket
-from pythia_delphi_adapter import (
-    MarketStatus,
-    OrderSide,
-    TradeReceipt,
-)
-from pythia_delphi_adapter.models import MarketCategory, OrderStatus
+from pythia_delphi_adapter import MarketStatus, TradeReceipt
 from pythia_risk import BankrollState, TradePlan
 from pythia_risk import Market as RiskMarket
 from pythia_risk import TradeReceipt as RiskTradeReceipt
@@ -87,70 +82,82 @@ class StubRiskEngine:
         self.update_state_calls.append(receipt)
 
 class StubDelphiClient:
-    """Stand-in for DelphiClient that tracks place_order calls."""
+    """Stand-in for DelphiClient that tracks buy_shares calls."""
 
     def __init__(self, market: AdapterMarket) -> None:
         self._market = market
-        self.place_order_calls: list[dict[str, Any]] = []
+        self.buy_shares_calls: list[dict[str, Any]] = []
+        self.ensure_token_approval_calls: list[dict[str, Any]] = []
         self._next_receipt = TradeReceipt(
-            market_id=market.market_id,
-            side=OrderSide.YES,
-            size_usd=10.0,
-            fill_price=0.55,
-            att_order_id="att-order-123",
-            status=OrderStatus.PENDING,
-            signed_by="test-key-fingerprint",
+            market_address=market.market_address,
+            outcome_idx=0,
+            side="buy",
+            shares="1000000000000000000",
+            transaction_hash="0xdeadbeef12345678",
+            max_tokens_in="1000000000000000000",
             timestamp=datetime.now(UTC),
         )
 
-    async def get_market(self, market_id: str) -> AdapterMarket:
+    async def get_market(
+        self, market_id: str, *, prices_and_implied_probabilities: bool = False
+    ) -> AdapterMarket:
         return self._market
 
-    async def place_order(
+    async def ensure_token_approval(
+        self, *, market_address: str, minimum_amount: str, approve_amount: str | None = None
+    ) -> Any:
+        self.ensure_token_approval_calls.append({
+            "market_address": market_address,
+            "minimum_amount": minimum_amount,
+            "approve_amount": approve_amount,
+        })
+        return {"approval_needed": False, "allowance": minimum_amount}
+
+    async def buy_shares(
         self,
-        market_id: str,
-        side: OrderSide,
-        size_usd: float,
-        limit_price: float | None = None,
-        correlation_id: str | None = None,
+        *,
+        market_address: str,
+        outcome_idx: int,
+        shares_out: str,
+        max_tokens_in: str,
     ) -> TradeReceipt:
-        self.place_order_calls.append(
-            {
-                "market_id": market_id,
-                "side": side,
-                "size_usd": size_usd,
-                "limit_price": limit_price,
-                "correlation_id": correlation_id,
-            }
-        )
+        self.buy_shares_calls.append({
+            "market_address": market_address,
+            "outcome_idx": outcome_idx,
+            "shares_out": shares_out,
+            "max_tokens_in": max_tokens_in,
+        })
         return self._next_receipt.model_copy(deep=True)
 
-    async def aclose(self) -> None:
+    async def stop(self) -> None:
         pass
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Fixtures — build Market using the new adapter SDK schema
 # ---------------------------------------------------------------------------
 
 def _make_market() -> AdapterMarket:
-    return AdapterMarket(
-        market_id="dphi_test_001",
-        question="Will the test pass by Friday?",
-        category=MarketCategory.SUBJECTIVE,
-        status=MarketStatus.OPEN,
-        yes_price=0.55,
-        no_price=0.45,
-        volume_usd=1000.0,
-        liquidity_usd=500.0,
-        created_at=datetime.now(UTC),
-        closes_at=None,
-        settlement_at=None,
-        arbiter_model="gpt-4o-mini",
-    )
+    """Build an adapter Market using the new SDK-compatible schema."""
+    return AdapterMarket.model_validate({
+        "id": "0xtestmarket001",
+        "appMarketId": "dphi_test_001",
+        "marketUrl": "https://testnet.delphi.fyi/m/dphi_test_001",
+        "status": "open",
+        "category": "miscellaneous",
+        "deployer": "0xfeed0000000000000000000000000000000000fd",
+        "createdAt": datetime.now(UTC).isoformat(),
+        "settlesAt": None,
+        "metadata": {
+            "question": "Will the test pass by Friday?",
+            "outcomes": ["YES", "NO"],
+        },
+        "spotPrices": [0.55, 0.45],
+        "spotImpliedProbabilities": [0.55, 0.45],
+    })
 
 def _make_estimate(analyst_id: str, prob: float = 0.7) -> Estimate:
     return Estimate(
-        market_id="dphi_test_001",
+        market_id="0xtestmarket001",
         probability=prob,
         confidence=0.8,
         rationale=f"stub estimate from {analyst_id}",
@@ -160,7 +167,7 @@ def _make_estimate(analyst_id: str, prob: float = 0.7) -> Estimate:
 
 def _make_decision(gate: str = "trade", prob: float = 0.7) -> ConsensusDecision:
     return ConsensusDecision(
-        market_id="dphi_test_001",
+        market_id="0xtestmarket001",
         consensus_prob=prob,
         agreement_score=0.85,
         gate=gate,  # type: ignore[arg-type]
@@ -172,8 +179,9 @@ def _make_decision(gate: str = "trade", prob: float = 0.7) -> ConsensusDecision:
 
 def _make_plan(decision: str = "APPROVE") -> TradePlan:
     return TradePlan(
-        market_id="dphi_test_001",
+        market_id="0xtestmarket001",
         side="YES",
+        outcome_idx=0,
         size_usd=25.0,
         limit_price=0.55,
         rationale="stub plan",
@@ -235,57 +243,52 @@ def _make_executor(
 
 @pytest.mark.asyncio
 async def test_paper_mode_does_not_submit(tmp_path: Path) -> None:
-    """Paper mode synthesises a PAPER receipt; place_order is never called."""
+    """Paper mode synthesises a PAPER receipt; buy_shares is never called."""
     audit_log = tmp_path / "audit.jsonl"
     executor, client, _ = _make_executor(mode="paper", audit_log_path=audit_log)
 
-    result = await executor.run_for_market("dphi_test_001")
+    result = await executor.run_for_market("0xtestmarket001")
 
-    assert client.place_order_calls == []
+    assert client.buy_shares_calls == []
     assert result.skipped_reason is None
     assert result.receipt is not None
-    # Paper receipts carry status="PAPER" (set via model_construct).
-    assert result.receipt.status == "PAPER"
-    assert result.receipt.signed_by == "paper-mode"
-    assert result.receipt.att_order_id.startswith("paper-")
+    # Paper receipt has a fake transaction hash starting with 0xpaper-.
+    assert result.receipt.transaction_hash.startswith("0xpaper-")
+    assert result.receipt.market_address == "0xtestmarket001"
+    assert result.receipt.outcome_idx == 0
 
 @pytest.mark.asyncio
-async def test_live_mode_submits_with_signature(
+async def test_live_mode_submits_via_buy_shares(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Live mode signs the order and calls delphi_client.place_order."""
-    # Set a non-32-byte signing key so HMAC-SHA256 path is used (no
-    # dependency on the cryptography package being installed).
+    """Live mode ensures token approval and calls buy_shares."""
     monkeypatch.setenv("DELPHI_SIGNING_KEY", "test-signing-key-not-32-bytes")
 
     audit_log = tmp_path / "audit.jsonl"
     executor, client, _ = _make_executor(mode="live", audit_log_path=audit_log)
 
-    result = await executor.run_for_market("dphi_test_001")
+    result = await executor.run_for_market("0xtestmarket001")
 
-    assert len(client.place_order_calls) == 1
-    call = client.place_order_calls[0]
-    assert call["market_id"] == "dphi_test_001"
-    assert call["side"] == OrderSide.YES
-    assert call["size_usd"] == 25.0
-    assert call["limit_price"] == 0.55
-    assert call["correlation_id"] is not None
+    # Token approval was called first.
+    assert len(client.ensure_token_approval_calls) == 1
+    assert client.ensure_token_approval_calls[0]["market_address"] == "0xtestmarket001"
+
+    # Then buy_shares was called.
+    assert len(client.buy_shares_calls) == 1
+    call = client.buy_shares_calls[0]
+    assert call["market_address"] == "0xtestmarket001"
+    assert call["outcome_idx"] == 0
+    assert int(call["shares_out"]) > 0
+    assert int(call["max_tokens_in"]) >= int(call["shares_out"])
 
     assert result.skipped_reason is None
     assert result.receipt is not None
-    # The live receipt came from the stub DelphiClient.
-    assert result.receipt.att_order_id == "att-order-123"
-    # _submit_live_order attached the signature as an extra field.
-    sig = getattr(result.receipt, "receipt_signature", None)
-    assert sig is not None
-    assert isinstance(sig, str)
-    assert len(sig) > 0
+    assert result.receipt.transaction_hash == "0xdeadbeef12345678"
 
 @pytest.mark.asyncio
 async def test_skips_when_insufficient_analysts(tmp_path: Path) -> None:
     """When the mesh returns < min_analysts estimates, we skip early."""
     audit_log = tmp_path / "audit.jsonl"
-    # Only 1 analyst, but min_analysts=2.
     mesh = [StubAnalyst("politics", _make_estimate("politics"))]
     executor, client, _ = _make_executor(
         mode="paper",
@@ -294,14 +297,14 @@ async def test_skips_when_insufficient_analysts(tmp_path: Path) -> None:
         audit_log_path=audit_log,
     )
 
-    result = await executor.run_for_market("dphi_test_001")
+    result = await executor.run_for_market("0xtestmarket001")
 
     assert result.skipped_reason == "insufficient_analysts"
     assert result.decision is None
     assert result.plan is None
     assert result.receipt is None
     assert len(result.estimates) == 1
-    assert client.place_order_calls == []
+    assert client.buy_shares_calls == []
 
 @pytest.mark.asyncio
 async def test_skips_when_gate_is_skip(tmp_path: Path) -> None:
@@ -314,21 +317,20 @@ async def test_skips_when_gate_is_skip(tmp_path: Path) -> None:
         audit_log_path=audit_log,
     )
 
-    result = await executor.run_for_market("dphi_test_001")
+    result = await executor.run_for_market("0xtestmarket001")
 
     assert result.skipped_reason == "gate_skip"
     assert result.decision is not None
     assert result.decision.gate == "skip"
     assert result.plan is None
     assert result.receipt is None
-    assert client.place_order_calls == []
+    assert client.buy_shares_calls == []
 
 @pytest.mark.asyncio
 async def test_skips_when_risk_rejects(tmp_path: Path) -> None:
     """When risk returns REJECT, we skip submission with risk_rejected:<flags>."""
     audit_log = tmp_path / "audit.jsonl"
     reject_plan = _make_plan(decision="REJECT")
-    # Override risk_flags for a deterministic assertion.
     reject_plan = reject_plan.model_copy(
         update={"risk_flags": ["no_edge", "drawdown_breaker"]}
     )
@@ -338,18 +340,17 @@ async def test_skips_when_risk_rejects(tmp_path: Path) -> None:
         audit_log_path=audit_log,
     )
 
-    result = await executor.run_for_market("dphi_test_001")
+    result = await executor.run_for_market("0xtestmarket001")
 
     assert result.skipped_reason == "risk_rejected:no_edge,drawdown_breaker"
     assert result.plan is not None
     assert result.plan.decision == "REJECT"
     assert result.receipt is None
-    assert client.place_order_calls == []
+    assert client.buy_shares_calls == []
 
 @pytest.mark.asyncio
 async def test_audit_log_written(tmp_path: Path) -> None:
-    """After a paper-trade run, the audit log has exactly one JSONL line
-    with the full decision chain."""
+    """After a paper-trade run, the audit log has exactly one JSONL line."""
     audit_log = tmp_path / "audit.jsonl"
     assert not audit_log.exists()
 
@@ -357,7 +358,7 @@ async def test_audit_log_written(tmp_path: Path) -> None:
         mode="paper", audit_log_path=audit_log
     )
 
-    await executor.run_for_market("dphi_test_001")
+    await executor.run_for_market("0xtestmarket001")
 
     assert audit_log.exists()
     lines = audit_log.read_text(encoding="utf-8").splitlines()
@@ -365,17 +366,14 @@ async def test_audit_log_written(tmp_path: Path) -> None:
     assert len(lines) == 1
 
     payload = json.loads(lines[0])
-    # Top-level fields.
-    assert payload["market_id"] == "dphi_test_001"
+    assert payload["market_id"] == "0xtestmarket001"
     assert payload["skipped_reason"] is None
     assert "timestamp" in payload
-    # Signature fields.
     assert "signature" in payload
     assert isinstance(payload["signature"], str)
     assert len(payload["signature"]) > 0
     assert payload["signature_algo"] in {"ed25519", "hmac-sha256"}
     assert "signed_by" in payload
-    # Decision chain.
     assert payload["estimates"] is not None
     assert len(payload["estimates"]) == 2
     assert payload["decision"] is not None
@@ -383,10 +381,11 @@ async def test_audit_log_written(tmp_path: Path) -> None:
     assert payload["plan"] is not None
     assert payload["plan"]["decision"] == "APPROVE"
     assert payload["receipt"] is not None
-    assert payload["receipt"]["status"] == "PAPER"
+    # Paper receipt has a fake transaction hash.
+    assert payload["receipt"]["transaction_hash"].startswith("0xpaper-")
 
     # Risk engine state was updated.
     assert len(risk_engine.update_state_calls) == 1
     risk_receipt = risk_engine.update_state_calls[0]
-    assert risk_receipt.market_id == "dphi_test_001"
+    assert risk_receipt.market_id == "0xtestmarket001"
     assert risk_receipt.side == "YES"

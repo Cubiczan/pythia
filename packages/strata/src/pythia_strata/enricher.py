@@ -214,6 +214,7 @@ class MarketEnricher:
         """
         query = " ".join(self._extract_keywords(market.question)) or market.question
         token_symbol = self._extract_token_symbol(market)
+        market_id = _market_id_str(market)
 
         # Decide which strata to fetch. News and social always run; on-chain
         # only runs for crypto-category markets. We express "skip" as a
@@ -244,27 +245,29 @@ class MarketEnricher:
             news_results,
             NewsArticle,
             "news",
-            market.market_id,
+            market_id,
         )
         onchain_metrics = _coerce_to_list(
             onchain_results,
             OnChainMetric,
             "on_chain",
-            market.market_id,
+            market_id,
         )
         social_signals = _coerce_to_list(
             social_results,
             SocialSignal,
             "social",
-            market.market_id,
+            market_id,
         )
 
         return EnrichedMarket(
-            market_id=market.market_id,
+            market_id=market_id,
             question=market.question,
             category=_category_str(market),
-            current_yes_price=getattr(market, "yes_price", None),
-            current_no_price=getattr(market, "no_price", None),
+            outcomes=getattr(market, "outcomes", None) or ["YES", "NO"],
+            spot_prices=getattr(market, "spot_prices", None) or [],
+            current_yes_price=_get_yes_price(market),
+            current_no_price=_get_no_price(market),
             volume_usd=getattr(market, "volume_usd", None),
             closes_at=_closes_at_str(market),
             news=news_articles,
@@ -306,6 +309,8 @@ class MarketEnricher:
             question=enriched.question,
             category=enriched.category,
             metadata=metadata,
+            outcomes=enriched.outcomes,
+            spot_prices=enriched.spot_prices,
             current_yes_price=enriched.current_yes_price,
             current_no_price=enriched.current_no_price,
             volume_usd=enriched.volume_usd,
@@ -448,31 +453,80 @@ def _category_str(market: Market) -> str:
     cat = getattr(market, "category", None)
     if cat is None:
         return "OTHER"
-    # ``MarketCategory`` enum → use .value if available, else str().
     value = getattr(cat, "value", None)
     if isinstance(value, str):
         return value
     return str(cat)
 
+def _market_id_str(market: Market) -> str:
+    """Extract the market identifier from a Market.
+
+    Handles both the new adapter Market (which uses ``market_address`` as
+    the on-chain proxy address and ``app_market_id`` as the UUID) and the
+    legacy fallback Market (which uses ``market_id``).
+
+    Prefers ``market_id`` if present (legacy compat), then ``market_address``
+    (new adapter), then ``app_market_id``.
+    """
+    mid = getattr(market, "market_id", None)
+    if mid:
+        return str(mid)
+    addr = getattr(market, "market_address", None)
+    if addr:
+        return str(addr)
+    app_id = getattr(market, "app_market_id", None)
+    if app_id:
+        return str(app_id)
+    return "unknown-market"
+
+def _get_yes_price(market: Market) -> float | None:
+    """Extract the YES price from a Market.
+
+    Handles both the new multi-outcome Market (spot_prices[0] for YES/NO
+    markets) and the legacy binary Market (yes_price field).
+    """
+    # Try spot_prices first (new API).
+    spot_prices = getattr(market, "spot_prices", None)
+    if spot_prices and len(spot_prices) >= 1:
+        return float(spot_prices[0])
+    # Fall back to legacy yes_price field.
+    return getattr(market, "yes_price", None)
+
+def _get_no_price(market: Market) -> float | None:
+    """Extract the NO price from a Market."""
+    spot_prices = getattr(market, "spot_prices", None)
+    if spot_prices and len(spot_prices) >= 2:
+        return float(spot_prices[1])
+    yes_p = getattr(market, "yes_price", None)
+    if yes_p is not None:
+        return 1.0 - float(yes_p)
+    return getattr(market, "no_price", None)
+
 def _closes_at_str(market: Market) -> str | None:
     """Extract ``closes_at`` as an ISO 8601 string from a Market.
 
-    The adapter's ``Market.closes_at`` is a ``datetime | None``; the
-    fallback ``Market`` is already a ``str | None``. Handle both.
+    The new adapter Market uses ``settles_at`` (datetime | None); the legacy
+    fallback Market uses ``closes_at`` (str | None). Handle both.
     """
+    # Try settles_at first (new adapter API).
+    settles_at = getattr(market, "settles_at", None)
+    if settles_at is not None:
+        if isinstance(settles_at, str):
+            return settles_at
+        if isinstance(settles_at, datetime):
+            if settles_at.tzinfo is None:
+                settles_at = settles_at.replace(tzinfo=UTC)
+            return settles_at.isoformat()
+    # Fall back to legacy closes_at field.
     closes_at = getattr(market, "closes_at", None)
     if closes_at is None:
         return None
     if isinstance(closes_at, str):
-        # Already a string — pass through (validation happens in
-        # EnrichedMarket's field_validator).
         return closes_at
     if isinstance(closes_at, datetime):
-        # Convert datetime → ISO 8601. If naive, assume UTC.
         if closes_at.tzinfo is None:
             closes_at = closes_at.replace(tzinfo=UTC)
         return closes_at.isoformat()
-    # Unknown type — best-effort string conversion.
     return str(closes_at)
 
 def _rollup_news(articles: list[NewsArticle]) -> str:

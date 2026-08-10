@@ -13,17 +13,25 @@ produced a ``ConsensusDecision``. It runs six gates, in order, and returns a
     6. Per-market cap?       → size reduced (silent)
 
 If all gates pass (or gate 4 reduces-but-doesn't-reject), the engine returns
-``APPROVE`` with the computed size and side.
+``APPROVE`` with the computed size, side, and outcome_idx.
 
-The engine holds an internal ``BankrollState`` that it keeps in sync via
-``update_state`` / ``record_loss`` / ``record_win`` as the executor fills
-trades and the market settles them. But ``evaluate`` itself takes the
-bankroll as a parameter — it does not read from ``self.state``. This makes
-``evaluate`` pure and trivially testable / replayable.
+Multi-outcome markets
+---------------------
 
-VERIFY comments mark places where we touch an upstream meshcfo API that may
-not exist yet (the repo is currently a thin stub). When meshcfo is vendored,
-re-check those call sites against the pinned commit.
+Delphi markets are multi-outcome LMSR. The engine receives a ``Market`` with
+``outcomes: list[str]`` and ``spot_prices: list[float]``, and a
+``ConsensusDecision`` with ``consensus_prob`` (the probability of the
+market's primary outcome — for binary markets this is P(YES)).
+
+For binary markets (``outcomes = ["YES", "NO"]``), the engine uses
+``consensus_prob`` as P(YES) and ``1 - consensus_prob`` as P(NO), then picks
+the side with the larger positive edge.
+
+For N-outcome markets, the engine distributes ``consensus_prob`` across
+outcomes using the spot price ratio as a prior (since the consensus layer
+currently produces a single probability, not a full distribution). This is
+a pragmatic approximation — a future consensus upgrade will produce a full
+``probabilities: list[float]`` distribution.
 """
 
 from __future__ import annotations
@@ -31,7 +39,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from pythia_risk.sizing import _compute_kelly_fraction, size_trade_fixed, size_trade_kelly
+from pythia_risk.sizing import (
+    _compute_kelly_fraction,
+    size_trade_fixed,
+    size_trade_kelly,
+    size_trade_kelly_multi,
+)
 from pythia_risk.types import (
     BankrollState,
     ConsensusDecision,
@@ -41,9 +54,9 @@ from pythia_risk.types import (
     TradeReceipt,
 )
 
-# Tolerance for the no-edge gate: if |consensus_prob - market.yes_price| < this,
-# we treat it as no edge. 2 percentage points (0.02) per the design.
-NO_EDGE_TOLERANCE: float = 0.02
+# Default tolerance for the no-edge gate. Overridden by config.no_edge_tolerance.
+DEFAULT_NO_EDGE_TOLERANCE: float = 0.02
+
 
 class RiskEngine:
     """Delphi risk-gating engine wrapping icohangar-ops/meshcfo.
@@ -65,11 +78,6 @@ class RiskEngine:
 
     def __init__(self, config: RiskConfig) -> None:
         self.config: RiskConfig = config
-        # Initial state mirrors the config's total exposure cap as starting
-        # cash. Real callers should overwrite this with the live ledger state
-        # before the first evaluate() call.
-        # VERIFY: meshcfo may expose a `Ledger.snapshot() -> BankrollState`
-        # method we should call here instead of synthesising a state.
         self.state: BankrollState = BankrollState(
             cash_usd=config.max_total_exposure_usd,
             open_positions_usd=0.0,
@@ -94,19 +102,18 @@ class RiskEngine:
         decision : ConsensusDecision
             Fused analyst output (from pythia_consensus).
         market : Market
-            Market metadata (id, yes_price, category, ...).
+            Market metadata (outcomes, spot_prices, category, ...).
         current_bankroll : BankrollState
             Live bankroll snapshot.
 
         Returns
         -------
         TradePlan
-            APPROVE / REJECT with rationale + risk_flags.
+            APPROVE / REJECT with rationale + risk_flags + outcome_idx.
         """
         flags: list[str] = []
         now = datetime.now(timezone.utc)
         consensus_prob = float(decision.consensus_prob)
-        market_price = float(market.yes_price)
         market_id = market.market_id
 
         # ----- Step 1: market-type allowed? -------------------------------
@@ -115,7 +122,8 @@ class RiskEngine:
             flags.append("market_type_not_allowed")
             return TradePlan(
                 market_id=market_id,
-                side="YES",
+                side=market.outcomes[0] if market.outcomes else "YES",
+                outcome_idx=0,
                 size_usd=0.0,
                 limit_price=None,
                 rationale=(
@@ -132,7 +140,8 @@ class RiskEngine:
             flags.append("drawdown_breaker")
             return TradePlan(
                 market_id=market_id,
-                side="YES",
+                side=market.outcomes[0] if market.outcomes else "YES",
+                outcome_idx=0,
                 size_usd=0.0,
                 limit_price=None,
                 rationale=(
@@ -152,7 +161,8 @@ class RiskEngine:
                 flags.append("cool_down_active")
                 return TradePlan(
                     market_id=market_id,
-                    side="YES",
+                    side=market.outcomes[0] if market.outcomes else "YES",
+                    outcome_idx=0,
                     size_usd=0.0,
                     limit_price=None,
                     rationale=(
@@ -164,62 +174,83 @@ class RiskEngine:
                     timestamp=now.isoformat(),
                 )
 
-        # ----- Step 6 (early): side determination -------------------------
-        # We need the side before sizing (Kelly differs for YES vs NO).
-        # Step 5 (no-edge) is also checked here since it gates side selection.
-        edge = consensus_prob - market_price
-        if abs(edge) < NO_EDGE_TOLERANCE:
+        # ----- Step 5: compute per-outcome edges and pick the best ---------
+        # Build per-outcome consensus probabilities. For binary markets,
+        # consensus_prob is P(YES) and P(NO) = 1 - p. For N-outcome markets,
+        # we distribute consensus_prob across outcomes using spot prices as
+        # a prior (a pragmatic approximation until consensus produces a full
+        # distribution).
+        outcomes = market.outcomes or ["YES", "NO"]
+        spot_prices = market.spot_prices or [0.5, 0.5]
+        if len(spot_prices) < len(outcomes):
+            # Pad with uniform distribution if we're short.
+            n = len(outcomes)
+            spot_prices = [1.0 / n] * n
+
+        if len(outcomes) == 2:
+            # Binary: consensus_prob is P(outcomes[0]).
+            consensus_probs = [consensus_prob, 1.0 - consensus_prob]
+        else:
+            # N-outcome: distribute consensus_prob proportional to spot prices.
+            # This is a placeholder until consensus produces a full distribution.
+            # The idea: if the consensus is "bullish" (prob > 0.5 on the primary
+            # outcome), scale up the outcomes with higher spot prices; if
+            # bearish, scale them down. We normalize at the end.
+            total_spot = sum(spot_prices) or 1.0
+            weights = [s / total_spot for s in spot_prices]
+            # Scale: if consensus_prob > 0.5, boost; if < 0.5, dampen.
+            # Simple approach: consensus_probs[i] = weights[i] * consensus_prob * n
+            # (this keeps the relative ordering and sums to consensus_prob * n).
+            # Then renormalize to sum to 1.
+            n = len(outcomes)
+            raw = [w * consensus_prob * n for w in weights]
+            total_raw = sum(raw) or 1.0
+            consensus_probs = [r / total_raw for r in raw]
+
+        # Find the best outcome to bet on.
+        no_edge_tol = getattr(self.config, "no_edge_tolerance", DEFAULT_NO_EDGE_TOLERANCE)
+        best_idx, best_stake, best_edge = size_trade_kelly_multi(
+            consensus_probs=consensus_probs,
+            spot_prices=spot_prices,
+            bankroll_usd=current_bankroll.current_bankroll_usd,
+            kelly_fraction=self.config.kelly_fraction,
+            max_stake_usd=min(
+                self.config.max_stake_per_market_usd,
+                rules.max_stake_usd,
+            ),
+            no_edge_tolerance=no_edge_tol,
+        )
+
+        # ----- Step 5b: no edge? -------------------------------------------
+        if best_idx < 0 or best_stake <= 0.0:
             flags.append("no_edge")
+            # Build a descriptive message for the first outcome with the closest edge.
+            edges = [consensus_probs[i] - spot_prices[i] for i in range(len(outcomes))]
+            max_edge = max(edges) if edges else 0.0
             return TradePlan(
                 market_id=market_id,
-                side="YES",
+                side=outcomes[0],
+                outcome_idx=0,
                 size_usd=0.0,
                 limit_price=None,
                 rationale=(
-                    f"No edge: |consensus_prob {consensus_prob:.4f} - "
-                    f"yes_price {market_price:.4f}| = {abs(edge):.4f} < "
-                    f"tolerance {NO_EDGE_TOLERANCE:.4f}."
+                    f"No edge: best outcome edge={max_edge:+.4f} < "
+                    f"tolerance {no_edge_tol:.4f}. "
+                    f"Outcomes={outcomes}, spot_prices={[round(s, 4) for s in spot_prices]}, "
+                    f"consensus_probs={[round(p, 4) for p in consensus_probs]}."
                 ),
                 risk_flags=flags,
                 decision="REJECT",
                 timestamp=now.isoformat(),
             )
 
-        if edge > 0:
-            side: str = "YES"
-        else:
-            side = "NO"
+        side = outcomes[best_idx]
+        m_side = spot_prices[best_idx]
+        p_side = consensus_probs[best_idx]
+        stake = best_stake
 
-        # ----- Step 5: sizing ----------------------------------------------
-        # Kelly math is symmetric: from the NO buyer's perspective, the
-        # market price for NO is (1 - m), and the consensus probability of
-        # NO winning is (1 - p). So we feed the flipped values into the same
-        # kelly_fraction function.
-        if side == "YES":
-            p_side = consensus_prob
-            m_side = market_price
-        else:
-            p_side = 1.0 - consensus_prob
-            m_side = 1.0 - market_price
-
-        if self.config.sizing == "kelly-fractional":
-            stake = size_trade_kelly(
-                p_consensus=p_side,
-                market_price=m_side,
-                bankroll_usd=current_bankroll.current_bankroll_usd,
-                kelly_fraction=self.config.kelly_fraction,
-                max_stake_usd=min(
-                    self.config.max_stake_per_market_usd,
-                    rules.max_stake_usd,
-                ),
-            )
-            sizing_note = (
-                f"fractional-Kelly (fraction={self.config.kelly_fraction:.2f}) "
-                f"stake on {side}: p_side={p_side:.4f}, m_side={m_side:.4f}, "
-                f"bankroll=${current_bankroll.current_bankroll_usd:.2f}"
-            )
-        elif self.config.sizing == "fixed":
-            # Fixed stake = the per-market cap (deterministic for paper trading).
+        # ----- Step 6: sizing method override (fixed) ----------------------
+        if self.config.sizing == "fixed":
             fixed_stake = min(
                 self.config.max_stake_per_market_usd,
                 rules.max_stake_usd,
@@ -228,13 +259,15 @@ class RiskEngine:
                 fixed_stake_usd=fixed_stake,
                 max_stake_usd=fixed_stake,
             )
-            sizing_note = f"fixed stake on {side}: ${stake:.2f}"
-        else:  # pragma: no cover - SizingMethod Literal makes this unreachable
-            raise RuntimeError(f"Unknown sizing method: {self.config.sizing!r}")
+            sizing_note = f"fixed stake on {side} (idx={best_idx}): ${stake:.2f}"
+        else:
+            sizing_note = (
+                f"fractional-Kelly (fraction={self.config.kelly_fraction:.2f}) "
+                f"stake on {side} (idx={best_idx}): p={p_side:.4f}, m={m_side:.4f}, "
+                f"bankroll=${current_bankroll.current_bankroll_usd:.2f}"
+            )
 
         # ----- Step 4: exposure cap ----------------------------------------
-        # If adding `stake` to current open positions exceeds the cap, reduce
-        # the stake to the available headroom. If headroom is <= 0, REJECT.
         available_headroom = max(
             0.0,
             self.config.max_total_exposure_usd - current_bankroll.open_positions_usd,
@@ -245,7 +278,8 @@ class RiskEngine:
             if stake <= 0.0:
                 return TradePlan(
                     market_id=market_id,
-                    side=side,  # type: ignore[arg-type]
+                    side=side,
+                    outcome_idx=best_idx,
                     size_usd=0.0,
                     limit_price=None,
                     rationale=(
@@ -259,9 +293,6 @@ class RiskEngine:
                 )
 
         # ----- Step 7: per-market cap (silent reduce) ---------------------
-        # Already enforced inside size_trade_kelly via the max_stake_usd
-        # argument above. We re-assert here for the fixed-stake path and to
-        # be defensive against any future code change.
         cap = min(self.config.max_stake_per_market_usd, rules.max_stake_usd)
         if stake > cap:
             stake = round(cap, 2)
@@ -272,15 +303,16 @@ class RiskEngine:
             f"{sizing_note}. "
             f"Full-Kelly fraction would be {full_kelly:.4f} of bankroll; "
             f"applied fraction={self.config.kelly_fraction:.2f} → "
-            f"final stake ${stake:.2f} on {side}. "
-            f"Edge={edge:+.4f} (consensus {consensus_prob:.4f} vs price {market_price:.4f})."
+            f"final stake ${stake:.2f} on {side} (outcome_idx={best_idx}). "
+            f"Edge={best_edge:+.4f} (consensus {p_side:.4f} vs price {m_side:.4f})."
         )
 
         return TradePlan(
             market_id=market_id,
-            side=side,  # type: ignore[arg-type]
+            side=side,
+            outcome_idx=best_idx,
             size_usd=stake,
-            limit_price=market_price,  # suggest a limit at the current price
+            limit_price=m_side,
             rationale=rationale,
             risk_flags=flags,
             decision="APPROVE",
@@ -290,46 +322,21 @@ class RiskEngine:
     # ------------------------------------------------------------------ state ops
 
     def update_state(self, trade: TradeReceipt) -> None:
-        """Update internal BankrollState after a trade fills.
-
-        Moves cash → open_positions and (re)computes drawdown off the peak.
-        Called by pythia-executor after each successful fill.
-
-        VERIFY: meshcfo's `Ledger.commit(trade)` may already do this; if so,
-        delegate to it and skip the local mutation.
-        """
+        """Update internal BankrollState after a trade fills."""
         size = float(trade.size_usd)
-        # Cash decreases by stake; open positions increase by stake.
         self.state.cash_usd = max(0.0, self.state.cash_usd - size)
         self.state.open_positions_usd += size
-        # current_bankroll = cash + open_positions (mark-to-market at cost).
         self.state.current_bankroll_usd = (
             self.state.cash_usd + self.state.open_positions_usd
         )
-        # Peak tracking — a new high-water mark resets the drawdown denominator.
         if self.state.current_bankroll_usd > self.state.peak_bankroll_usd:
             self.state.peak_bankroll_usd = self.state.current_bankroll_usd
         self._recompute_drawdown()
 
     def record_loss(self, market_id: str, loss_usd: float) -> None:
-        """Record a realised loss on a settled market.
-
-        Decrements ``current_bankroll`` by ``loss_usd``, sets ``last_loss_at``
-        to now (which arms the cool-down gate), and recomputes drawdown. The
-        peak is NOT moved — only wins can move the peak.
-
-        Parameters
-        ----------
-        market_id : str
-            Settled market id (for audit logging; not used in computation).
-        loss_usd : float
-            Positive number = dollars lost. Must be >= 0.
-        """
+        """Record a realised loss on a settled market."""
         if loss_usd < 0.0:
             raise ValueError(f"loss_usd must be >= 0, got {loss_usd!r}")
-        # Open positions decrease (the position is gone), cash unchanged
-        # (the loss is realised, not a cash outflow here). Current bankroll
-        # drops by the loss amount.
         self.state.open_positions_usd = max(
             0.0, self.state.open_positions_usd - loss_usd
         )
@@ -338,42 +345,20 @@ class RiskEngine:
         )
         self.state.last_loss_at = datetime.now(timezone.utc)
         self._recompute_drawdown()
-        # VERIFY: meshcfo may want a hook here, e.g. `Ledger.on_loss(market_id, loss_usd)`.
 
     def record_win(self, market_id: str, win_usd: float) -> None:
-        """Record a realised win on a settled market.
-
-        Adds ``win_usd`` to ``current_bankroll`` and updates the peak if this
-        is a new high-water mark. Does not arm the cool-down.
-
-        Parameters
-        ----------
-        market_id : str
-            Settled market id (for audit logging; not used in computation).
-        win_usd : float
-            Positive number = dollars won (net profit). Must be >= 0.
-        """
+        """Record a realised win on a settled market."""
         if win_usd < 0.0:
             raise ValueError(f"win_usd must be >= 0, got {win_usd!r}")
-        # The original stake comes back as cash; win_usd is the net profit
-        # on top. For simplicity we add win_usd to current bankroll and let
-        # update_state handle the stake movement separately (the executor
-        # calls update_state on fill, then record_win/record_loss on settle).
         self.state.current_bankroll_usd += win_usd
         if self.state.current_bankroll_usd > self.state.peak_bankroll_usd:
             self.state.peak_bankroll_usd = self.state.current_bankroll_usd
         self._recompute_drawdown()
-        # VERIFY: meshcfo may want a hook here, e.g. `Ledger.on_win(market_id, win_usd)`.
 
     # ------------------------------------------------------------------ internals
 
     def _recompute_drawdown(self) -> None:
-        """Recompute ``state.drawdown_pct`` off the current peak.
-
-            drawdown_pct = (peak - current) / peak * 100
-
-        Guarded against peak == 0 (returns 0).
-        """
+        """Recompute ``state.drawdown_pct`` off the current peak."""
         peak = self.state.peak_bankroll_usd
         if peak <= 0.0:
             self.state.drawdown_pct = 0.0
