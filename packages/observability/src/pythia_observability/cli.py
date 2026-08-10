@@ -28,7 +28,6 @@ from .achievements import AchievementsEvaluator
 from .audit_reader import AuditLogReader
 from .server import ReplayServer
 
-
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pythia-replay",
@@ -110,7 +109,6 @@ def _build_parser() -> argparse.ArgumentParser:
 
     return parser
 
-
 def _cmd_serve(args: argparse.Namespace) -> int:
     server = ReplayServer(
         log_path=args.log,
@@ -124,14 +122,12 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     server.run(host=args.host, port=args.port)
     return 0
 
-
 def _cmd_stats(args: argparse.Namespace) -> int:
     reader = AuditLogReader(args.log)
     stats = reader.compute_stats()
     json.dump(stats, sys.stdout, indent=2, default=str)
     sys.stdout.write("\n")
     return 0
-
 
 def _cmd_achievements(args: argparse.Namespace) -> int:
     reader = AuditLogReader(args.log)
@@ -148,7 +144,6 @@ def _cmd_achievements(args: argparse.Namespace) -> int:
     sys.stdout.write("\n")
     return 0
 
-
 def _cmd_export(args: argparse.Namespace) -> int:
     reader = AuditLogReader(args.log)
     entries = reader.read_all()
@@ -163,7 +158,6 @@ def _cmd_export(args: argparse.Namespace) -> int:
         file=sys.stderr,
     )
     return 0
-
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Entry point for the `pythia-replay` console script."""
@@ -181,7 +175,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser.error(f"unknown command: {args.command!r}")
     return 2  # unreachable
-
 
 if __name__ == "__main__":
     sys.exit(main())

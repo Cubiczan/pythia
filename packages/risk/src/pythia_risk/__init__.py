@@ -48,7 +48,6 @@ __all__ = [
     "__version__",
 ]
 
-
 def size_trade(
     consensus_prob: float,
     market_price: float,

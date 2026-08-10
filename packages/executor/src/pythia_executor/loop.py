@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 # Prevents the loop from spamming the same market every iteration.
 _DEFAULT_COOL_DOWN_PER_MARKET_SEC = 300  # 5 minutes
 
-
 async def run_loop(
     executor: PythiaExecutor,
     poll_interval_sec: int,
@@ -123,7 +122,6 @@ async def run_loop(
         iteration, len(seen),
     )
 
-
 async def _list_open_markets(
     executor: PythiaExecutor,
     market_filter: dict[str, Any] | None,
@@ -137,7 +135,6 @@ async def _list_open_markets(
     kwargs = dict(market_filter) if market_filter else {}
     markets = await executor.delphi_client.list_markets(**kwargs)  # type: ignore[attr-defined]
     return markets
-
 
 def _install_signal_handlers(stop_event: asyncio.Event) -> None:
     """Install SIGINT / SIGTERM handlers that set the stop event.
@@ -163,6 +160,5 @@ def _install_signal_handlers(stop_event: asyncio.Event) -> None:
             # Fall back to the low-level signal.signal API for SIGINT.
             if sig_name == "SIGINT":
                 signal.signal(sig, lambda *_: stop_event.set())
-
 
 __all__ = ["run_loop"]

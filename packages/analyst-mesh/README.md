@@ -4,7 +4,7 @@
 
 > *No single model issues a prophecy. The mesh is the oracle.*
 
-`pythia-analyst-mesh` is the agent layer of [Pythia](https://github.com/icohangar-ops/pythia) — a hardened, auditable, multi-agent trading mesh for [Gensyn's Delphi information markets](https://dorahacks.io/hackathon/delphi-agent-competition).
+`pythia-analyst-mesh` is the agent layer of [Pythia](https://github.com/icohangar-ops/pythia) — a hardened, auditable, multi-agent trading mesh for Gensyn's Delphi information markets.
 
 Each **analyst** is an LLM-powered agent that specializes in one Delphi market category. Given a `MarketContext` (the question + metadata + current order-book price), an analyst emits an `Estimate`: a probability `P(YES)`, a self-reported confidence, a short rationale, and a list of evidence URLs. Estimates from N analysts are then fused by `pythia-consensus` into a single calibrated consensus probability and an agreement score that gates whether a trade is placed at all.
 
@@ -290,7 +290,7 @@ The mesh is consumed by `pythia-consensus`. It is fed `MarketContext` objects th
 
 ## Status
 
-Scaffold. The 4 analysts are real (system prompts + provider dispatch + robust parsing), but:
+Reference implementation. The 4 analysts are real (system prompts + provider dispatch + robust parsing), but:
 
 - Gensyn provider REST shape is `# VERIFY:` — pending Gensyn's public API docs.
 - Entry-point-based analyst discovery (TOML `extra_analysts`) is `# TODO:`.

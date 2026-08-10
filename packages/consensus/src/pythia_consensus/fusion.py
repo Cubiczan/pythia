@@ -59,7 +59,6 @@ _P_CLAMP_HI = 0.99
 # theoretical maximum disagreement (half the mass at p=0, half at p=1).
 _AGREEMENT_SIGMA_MAX = 0.5
 
-
 def _normalise_weights(
     estimates: Sequence[Estimate],
     weights: dict[str, float] | None,
@@ -90,13 +89,11 @@ def _normalise_weights(
         return np.full(n, 1.0 / n, dtype=np.float64)
     return raw / total
 
-
 def _weighted_mean(probs: np.ndarray, weights: np.ndarray) -> float:
     """Σ w_i · p_i for already-normalised weights."""
     if probs.size == 0:
         return 0.0
     return float(np.dot(weights, probs))
-
 
 def _weighted_stddev(probs: np.ndarray, weights: np.ndarray) -> float:
     """Weighted population standard deviation.
@@ -108,7 +105,6 @@ def _weighted_stddev(probs: np.ndarray, weights: np.ndarray) -> float:
     mean = _weighted_mean(probs, weights)
     var = float(np.dot(weights, (probs - mean) ** 2))
     return float(np.sqrt(max(var, 0.0)))
-
 
 def _weighted_median(probs: np.ndarray, weights: np.ndarray) -> float:
     """Weighted median.
@@ -136,7 +132,6 @@ def _weighted_median(probs: np.ndarray, weights: np.ndarray) -> float:
         return float(p_sorted[-1])
     return float(p_sorted[idx])
 
-
 # ---------------------------------------------------------------------------
 # Public fusion functions.
 # ---------------------------------------------------------------------------
@@ -153,11 +148,9 @@ def fuse_logit_mean(probs: np.ndarray, weights: np.ndarray) -> float:
     L_star = float(np.dot(weights, logits))
     return float(expit(L_star))
 
-
 def fuse_median(probs: np.ndarray, weights: np.ndarray) -> float:
     """Weighted median."""
     return _weighted_median(probs, weights)
-
 
 def fuse_trimmed_mean(probs: np.ndarray, weights: np.ndarray) -> float:
     """Drop highest and lowest, weighted-mean the rest.
@@ -178,13 +171,11 @@ def fuse_trimmed_mean(probs: np.ndarray, weights: np.ndarray) -> float:
         return _weighted_mean(probs, weights)
     return float(np.dot(w_t / total, p_t))
 
-
 _FUSION_DISPATCH: dict[ConsensusMethod, callable] = {  # type: ignore[type-arg]
     "logit-mean": fuse_logit_mean,
     "median": fuse_median,
     "trimmed-mean": fuse_trimmed_mean,
 }
-
 
 def agreement_score(
     estimates: Sequence[Estimate],
@@ -206,7 +197,6 @@ def agreement_score(
     score = 1.0 - (sigma / _AGREEMENT_SIGMA_MAX)
     return float(max(0.0, min(1.0, score)))
 
-
 def _decide_gate(
     n: int,
     score: float,
@@ -217,7 +207,6 @@ def _decide_gate(
     if score < config.agreement_threshold:
         return "skip"
     return "trade"
-
 
 def fuse(estimates: Sequence[Estimate], config: ConsensusConfig) -> ConsensusDecision:
     """Fuse N analyst estimates into a single `ConsensusDecision`.
@@ -268,7 +257,6 @@ def fuse(estimates: Sequence[Estimate], config: ConsensusConfig) -> ConsensusDec
         weights_used=weights_used,
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
-
 
 __all__ = [
     "agreement_score",

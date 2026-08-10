@@ -28,11 +28,9 @@ from .types import ExecutorConfig
 
 logger = logging.getLogger("pythia_executor.cli")
 
-
 # ---------------------------------------------------------------------------
 # main()
 # ---------------------------------------------------------------------------
-
 
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point. Returns a process exit code."""
@@ -46,11 +44,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.print_help()
     return 0
 
-
 # ---------------------------------------------------------------------------
 # argparse tree
 # ---------------------------------------------------------------------------
-
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -110,18 +106,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     return parser
 
-
 # ---------------------------------------------------------------------------
 # dispatch
 # ---------------------------------------------------------------------------
-
 
 def _dispatch_executor(args: argparse.Namespace) -> int:
     if args.executor_command == "delphi":
         return _dispatch_delphi(args)
     print("Usage: pythia executor delphi {paper-trade|run|replay} ...", file=sys.stderr)
     return 1
-
 
 def _dispatch_delphi(args: argparse.Namespace) -> int:
     if args.delphi_command == "paper-trade":
@@ -133,11 +126,9 @@ def _dispatch_delphi(args: argparse.Namespace) -> int:
     print("Usage: pythia executor delphi {paper-trade|run|replay} ...", file=sys.stderr)
     return 1
 
-
 # ---------------------------------------------------------------------------
 # paper-trade
 # ---------------------------------------------------------------------------
-
 
 async def _cmd_paper_trade(args: argparse.Namespace) -> int:
     from pythia_analyst_mesh import AnalystRegistry
@@ -213,11 +204,9 @@ async def _cmd_paper_trade(args: argparse.Namespace) -> int:
     print(json.dumps(payload, indent=2, default=str))
     return 0
 
-
 # ---------------------------------------------------------------------------
 # run
 # ---------------------------------------------------------------------------
-
 
 async def _cmd_run(args: argparse.Namespace) -> int:
     from .loop import run_loop
@@ -248,18 +237,15 @@ async def _cmd_run(args: argparse.Namespace) -> int:
             await aclose()
     return 0
 
-
 def _resolve_market_status() -> Any:
     """Resolve the MarketStatus.OPEN enum without hard-importing at module load."""
     from pythia_delphi_adapter import MarketStatus
 
     return MarketStatus.OPEN
 
-
 # ---------------------------------------------------------------------------
 # replay
 # ---------------------------------------------------------------------------
-
 
 def _cmd_replay(args: argparse.Namespace) -> int:
     log_path = Path(args.audit_log_path)
@@ -294,7 +280,6 @@ def _cmd_replay(args: argparse.Namespace) -> int:
 
     print(_format_replay(payload))
     return 0
-
 
 def _format_replay(payload: dict[str, Any]) -> str:
     """Pretty-print a single audit-log entry as a human-readable chain."""
@@ -351,11 +336,9 @@ def _format_replay(payload: dict[str, Any]) -> str:
 
     return "\n".join(out)
 
-
 # ---------------------------------------------------------------------------
 # config loading + component assembly
 # ---------------------------------------------------------------------------
-
 
 def _load_toml_config(path: str) -> dict[str, Any]:
     """Load a TOML config file. Uses tomllib on 3.11+, tomli otherwise."""
@@ -365,7 +348,6 @@ def _load_toml_config(path: str) -> dict[str, Any]:
         import tomli as tomllib  # type: ignore[no-redef]
     with open(path, "rb") as f:
         return tomllib.load(f)
-
 
 def _build_executor_from_config(
     config: dict[str, Any], args: argparse.Namespace
@@ -451,7 +433,6 @@ def _build_executor_from_config(
         audit_log_path=audit_log_path,
     )
 
-
 def _build_llm_config(args: argparse.Namespace) -> Any:
     """Build an LLMConfig from CLI args + env vars."""
     from pythia_analyst_mesh import LLMConfig
@@ -465,11 +446,9 @@ def _build_llm_config(args: argparse.Namespace) -> Any:
         api_key=api_key,
     )
 
-
 # ---------------------------------------------------------------------------
 # logging
 # ---------------------------------------------------------------------------
-
 
 def _configure_logging(level: str) -> None:
     """Configure root logging from a level name."""
@@ -484,7 +463,6 @@ def _configure_logging(level: str) -> None:
         level=level_map.get(level.lower(), logging.INFO),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
-
 
 if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())

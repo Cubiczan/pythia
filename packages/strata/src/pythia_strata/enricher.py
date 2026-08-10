@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Minimal English stopword list. We don't pull in NLTK / spaCy for this —
+# Minimal English stopword list. We don't pull in NLTK / spaCy for this 
 # the keyword extraction is best-effort, only used to seed the news/social
 # search query, and a long tail of obscure stopwords wouldn't materially
 # improve the query quality. If a market question is dominated by a
@@ -166,7 +166,6 @@ _STOPWORDS: frozenset[str] = frozenset(
 # "best-of-seven" → ["best", "of", "seven"]). Lowercase everything.
 _TOKEN_RE = re.compile(r"[^a-zA-Z0-9]+")
 
-
 class MarketEnricher:
     """Orchestrates the three enrichment providers and builds EnrichedMarket.
 
@@ -180,7 +179,7 @@ class MarketEnricher:
     social:
         ``SocialProvider`` instance. Required (same stub pattern).
 
-    The enricher does NOT take ownership of closing these providers —
+    The enricher does NOT take ownership of closing these providers 
     they're cheap, stateless objects (the underlying ``httpx.AsyncClient``
     is created per-call inside each provider's ``fetch``). If you wire
     up a stateful provider (e.g. one that holds a persistent connection
@@ -402,16 +401,13 @@ class MarketEnricher:
             return []
         return result
 
-
 # ---------------------------------------------------------------------------
 # Module-level helpers (kept at module scope so they're easily testable)
 # ---------------------------------------------------------------------------
 
-
 async def _return_empty_list() -> list[Any]:
     """Async coroutine that returns ``[]`` — used to skip a stratum cleanly."""
     return []
-
 
 def _coerce_to_list(
     value: Any,
@@ -447,7 +443,6 @@ def _coerce_to_list(
     )
     return []
 
-
 def _category_str(market: Market) -> str:
     """Extract a plain string category from a Market (handles enum or str)."""
     cat = getattr(market, "category", None)
@@ -458,7 +453,6 @@ def _category_str(market: Market) -> str:
     if isinstance(value, str):
         return value
     return str(cat)
-
 
 def _closes_at_str(market: Market) -> str | None:
     """Extract ``closes_at`` as an ISO 8601 string from a Market.
@@ -481,7 +475,6 @@ def _closes_at_str(market: Market) -> str | None:
     # Unknown type — best-effort string conversion.
     return str(closes_at)
 
-
 def _rollup_news(articles: list[NewsArticle]) -> str:
     """Build a single-string rollup of the news headlines for the LLM prompt.
 
@@ -503,6 +496,5 @@ def _rollup_news(articles: list[NewsArticle]) -> str:
         source = (a.source or "?").strip()
         parts.append(f"{source}: {headline}")
     return "; ".join(parts)
-
 
 __all__ = ["MarketEnricher"]

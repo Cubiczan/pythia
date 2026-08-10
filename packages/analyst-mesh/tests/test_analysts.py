@@ -26,7 +26,6 @@ from pythia_analyst_mesh.base import BaseAnalyst
 # Fixtures
 # --------------------------------------------------------------------- #
 
-
 @pytest.fixture
 def llm_config() -> LLMConfig:
     return LLMConfig(
@@ -36,7 +35,6 @@ def llm_config() -> LLMConfig:
         temperature=0.2,
         max_tokens=64,
     )
-
 
 @pytest.fixture
 def politics_market() -> MarketContext:
@@ -51,7 +49,6 @@ def politics_market() -> MarketContext:
         closes_at="2026-11-04T20:00:00Z",
     )
 
-
 @pytest.fixture
 def crypto_market() -> MarketContext:
     return MarketContext(
@@ -64,7 +61,6 @@ def crypto_market() -> MarketContext:
         volume_usd=124_000.0,
         closes_at="2026-12-31T23:59:59Z",
     )
-
 
 @pytest.fixture
 def sports_market() -> MarketContext:
@@ -79,7 +75,6 @@ def sports_market() -> MarketContext:
         closes_at="2026-04-15T23:59:59Z",
     )
 
-
 @pytest.fixture
 def niche_market() -> MarketContext:
     return MarketContext(
@@ -93,11 +88,9 @@ def niche_market() -> MarketContext:
         closes_at="2027-02-05T03:00:00Z",
     )
 
-
 # --------------------------------------------------------------------- #
 # Shared structural assertions
 # --------------------------------------------------------------------- #
-
 
 def _assert_prompt_structure(messages, analyst, market):
     """Common assertions for _build_prompt output."""
@@ -138,7 +131,6 @@ def _assert_prompt_structure(messages, analyst, market):
     assert "rationale" in user_content
     assert "evidence" in user_content
 
-
 def _assert_system_prompt_calibration(analyst):
     """System prompt must mention calibration (per task spec)."""
     s = analyst.SYSTEM_PROMPT.lower()
@@ -147,7 +139,6 @@ def _assert_system_prompt_calibration(analyst):
     assert "0.6" in s or "< 0.6" in s, \
         f"system prompt must reference the 0.6 confidence threshold: {analyst.SYSTEM_PROMPT!r}"
 
-
 def _assert_system_prompt_length(analyst):
     """System prompt should be 2-4 sentences (per task spec)."""
     # Count sentences by terminal punctuation. Allow some slack.
@@ -155,11 +146,9 @@ def _assert_system_prompt_length(analyst):
     assert 2 <= n <= 6, \
         f"system prompt should be 2-4 sentences, got ~{n}: {analyst.SYSTEM_PROMPT!r}"
 
-
 # --------------------------------------------------------------------- #
 # Per-analyst prompt tests
 # --------------------------------------------------------------------- #
-
 
 def test_politics_prompt_structure(llm_config, politics_market):
     a = PoliticsAnalyst(llm_config)
@@ -169,7 +158,6 @@ def test_politics_prompt_structure(llm_config, politics_market):
     _assert_system_prompt_length(a)
     # Politics-specific guidance should appear.
     assert "polling" in msgs[1]["content"].lower()
-
 
 def test_crypto_prompt_structure(llm_config, crypto_market):
     a = CryptoAnalyst(llm_config)
@@ -181,7 +169,6 @@ def test_crypto_prompt_structure(llm_config, crypto_market):
     content = msgs[1]["content"].lower()
     assert "on-chain" in content or "defillama" in content or "etherscan" in content
 
-
 def test_sports_prompt_structure(llm_config, sports_market):
     a = SportsAnalyst(llm_config)
     msgs = a._build_prompt(sports_market)
@@ -191,7 +178,6 @@ def test_sports_prompt_structure(llm_config, sports_market):
     # Sports-specific guidance should appear.
     content = msgs[1]["content"].lower()
     assert "elo" in content or "injury" in content or "rating" in content
-
 
 def test_niche_prompt_structure(llm_config, niche_market):
     a = NicheAnalyst(llm_config)
@@ -203,11 +189,9 @@ def test_niche_prompt_structure(llm_config, niche_market):
     content = msgs[1]["content"].lower()
     assert "anchor" in content or "subjective" in content or "award" in content
 
-
 # --------------------------------------------------------------------- #
 # Full estimate() pipeline with mocked LLM
 # --------------------------------------------------------------------- #
-
 
 def _mock_llm_response(*, prob, conf, rationale="Mocked.", evidence=None):
     return json.dumps({
@@ -216,7 +200,6 @@ def _mock_llm_response(*, prob, conf, rationale="Mocked.", evidence=None):
         "rationale": rationale,
         "evidence": evidence or [],
     })
-
 
 async def test_politics_estimate_with_mocked_llm(llm_config, politics_market):
     a = PoliticsAnalyst(llm_config)
@@ -231,7 +214,6 @@ async def test_politics_estimate_with_mocked_llm(llm_config, politics_market):
     assert est.confidence == pytest.approx(0.7)
     assert "https://polls.example.com" in est.evidence
 
-
 async def test_crypto_estimate_with_mocked_llm(llm_config, crypto_market):
     a = CryptoAnalyst(llm_config)
     fake = _mock_llm_response(prob=0.35, conf=0.55, evidence=["https://etherscan.io"])
@@ -243,7 +225,6 @@ async def test_crypto_estimate_with_mocked_llm(llm_config, crypto_market):
     assert est.probability == pytest.approx(0.35)
     assert est.confidence == pytest.approx(0.55)
 
-
 async def test_sports_estimate_with_mocked_llm(llm_config, sports_market):
     a = SportsAnalyst(llm_config)
     fake = _mock_llm_response(prob=0.58, conf=0.65)
@@ -253,7 +234,6 @@ async def test_sports_estimate_with_mocked_llm(llm_config, sports_market):
         est = await a.estimate(sports_market)
     assert est.analyst_id == "sports"
     assert est.probability == pytest.approx(0.58)
-
 
 async def test_niche_estimate_with_mocked_llm(llm_config, niche_market):
     a = NicheAnalyst(llm_config)
@@ -266,11 +246,9 @@ async def test_niche_estimate_with_mocked_llm(llm_config, niche_market):
     assert est.probability == pytest.approx(0.28)
     assert est.confidence == pytest.approx(0.4)
 
-
 # --------------------------------------------------------------------- #
 # run_mesh integration (mocked LLM)
 # --------------------------------------------------------------------- #
-
 
 async def test_run_mesh_with_mocked_llm(llm_config, politics_market):
     from pythia_analyst_mesh import AnalystRegistry, run_mesh
@@ -295,7 +273,6 @@ async def test_run_mesh_with_mocked_llm(llm_config, politics_market):
     assert {e.analyst_id for e in estimates} == {"politics", "crypto", "niche"}
     probs = [e.probability for e in estimates]
     assert probs == pytest.approx([0.6, 0.55, 0.45])
-
 
 async def test_run_mesh_drops_failing_analyst(llm_config, politics_market):
     """One analyst raising should not crash the mesh."""

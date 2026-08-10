@@ -20,7 +20,6 @@ from pythia_consensus.fusion import (
 )
 from pythia_consensus.types import Estimate
 
-
 def _est(
     probabilities: list[float],
     *,
@@ -41,7 +40,6 @@ def _est(
         )
         for i, p in enumerate(probabilities)
     ]
-
 
 # ---------------------------------------------------------------------------
 # logit-mean
@@ -80,7 +78,6 @@ class TestLogitMean:
         assert decision.consensus_prob > 0.8525
         assert decision.consensus_prob < 0.97
 
-
 # ---------------------------------------------------------------------------
 # median
 # ---------------------------------------------------------------------------
@@ -110,7 +107,6 @@ class TestMedian:
         result = fuse_median(probs, w)
         assert result == pytest.approx(0.4, abs=1e-9)
 
-
 # ---------------------------------------------------------------------------
 # trimmed-mean
 # ---------------------------------------------------------------------------
@@ -136,7 +132,6 @@ class TestTrimmedMean:
         # Drop lowest (0.1) and highest (0.9) → [0.4, 0.6], renormalised weights [0.5, 0.5]
         # Mean = 0.5
         assert fuse_trimmed_mean(probs, w) == pytest.approx(0.5, abs=1e-9)
-
 
 # ---------------------------------------------------------------------------
 # agreement_score
@@ -165,7 +160,6 @@ class TestAgreementScore:
         # σ_w = sqrt(0.5 * (0.25-0.5)^2 + 0.5 * (0.75-0.5)^2) = sqrt(0.5*0.0625*2) = sqrt(0.0625) = 0.25
         # score = 1 - 0.25/0.5 = 0.5
         assert score == pytest.approx(0.5, abs=1e-6)
-
 
 # ---------------------------------------------------------------------------
 # Gate logic
@@ -198,7 +192,6 @@ class TestGateLogic:
         decision = fuse(ests, cfg)
         assert decision.gate == "trade"
         assert decision.agreement_score >= cfg.agreement_threshold
-
 
 # ---------------------------------------------------------------------------
 # Weights
@@ -234,7 +227,6 @@ class TestWeights:
         assert set(d.weights_used.keys()) == {"a0", "a1", "a2"}
         # Weights should be normalised to sum to 1.
         assert sum(d.weights_used.values()) == pytest.approx(1.0, abs=1e-9)
-
 
 # ---------------------------------------------------------------------------
 # Misc

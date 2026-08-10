@@ -64,7 +64,6 @@ except Exception:  # noqa: BLE001 - we want to swallow any import failure
 
     MARKET_SOURCE = "local-fallback"
 
-
 # ---------------------------------------------------------------------------
 # MarketContext re-export (from pythia_analyst_mesh, with local fallback).
 # ---------------------------------------------------------------------------
@@ -100,18 +99,15 @@ except Exception:  # noqa: BLE001 - we want to swallow any import failure
 
     MARKET_CONTEXT_SOURCE = "local-fallback"
 
-
 # ---------------------------------------------------------------------------
 # Enrichment payload types
 # ---------------------------------------------------------------------------
 SocialPlatform = Literal["twitter", "reddit", "farcaster"]
 """Supported social platforms for ``SocialSignal``."""
 
-
 def _now_iso() -> str:
     """Return the current UTC time as an ISO 8601 string."""
     return datetime.now(UTC).isoformat()
-
 
 class NewsArticle(BaseModel):
     """A single news article returned by ``NewsProvider.fetch``.
@@ -156,7 +152,6 @@ class NewsArticle(BaseModel):
             raise ValueError(f"published_at must be ISO 8601 or None, got: {v!r}") from exc
         return v
 
-
 class OnChainMetric(BaseModel):
     """A single on-chain metric for a token, returned by ``OnChainProvider.fetch``.
 
@@ -198,7 +193,6 @@ class OnChainMetric(BaseModel):
         except ValueError as exc:
             raise ValueError(f"timestamp must be ISO 8601, got: {v!r}") from exc
         return v
-
 
 class SocialSignal(BaseModel):
     """A single social-platform signal aggregate, returned by ``SocialProvider.fetch``.
@@ -243,7 +237,6 @@ class SocialSignal(BaseModel):
         except ValueError as exc:
             raise ValueError(f"timestamp must be ISO 8601, got: {v!r}") from exc
         return v
-
 
 class EnrichedMarket(BaseModel):
     """A Delphi market plus its three strata of enrichment context.
@@ -305,7 +298,6 @@ class EnrichedMarket(BaseModel):
         except ValueError as exc:
             raise ValueError(f"closes_at must be ISO 8601 or None, got: {v!r}") from exc
         return v
-
 
 __all__ = [
     "EnrichedMarket",

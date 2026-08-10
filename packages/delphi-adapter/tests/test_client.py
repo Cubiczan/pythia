@@ -25,11 +25,9 @@ from pythia_delphi_adapter.client import (
 )
 from pythia_delphi_adapter.models import MarketStatus, OrderSide
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
 
 def _market_payload(
     market_id: str = "dphi_01JABC",
@@ -53,7 +51,6 @@ def _market_payload(
         "arbiter_model": "gensyn-arbiter-v1",  # VERIFY: real field name.
     }
 
-
 def _settlement_payload(market_id: str = "dphi_01JABC") -> dict:
     return {
         "market_id": market_id,
@@ -63,7 +60,6 @@ def _settlement_payload(market_id: str = "dphi_01JABC") -> dict:
         "resolved_at": "2026-09-01T00:00:30Z",
         "evidence_hashes": ["bafyabc123", "bafydef456"],
     }
-
 
 def _make_client(handler) -> DelphiClient:
     """Build a ``DelphiClient`` backed by a MockTransport handler."""
@@ -85,11 +81,9 @@ def _make_client(handler) -> DelphiClient:
         http_client=http,
     )
 
-
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
-
 
 @pytest.mark.asyncio
 async def test_list_markets_parses_response() -> None:
@@ -117,7 +111,6 @@ async def test_list_markets_parses_response() -> None:
     assert markets[0].arbiter_model == "gensyn-arbiter-v1"
     assert markets[0].created_at.tzinfo is not None  # parsed as UTC-aware
 
-
 @pytest.mark.asyncio
 async def test_list_markets_accepts_bare_list_response() -> None:
     """ATT may return a bare list instead of {'markets': [...]}."""
@@ -130,7 +123,6 @@ async def test_list_markets_accepts_bare_list_response() -> None:
 
     assert len(markets) == 1
     assert markets[0].market_id == "dphi_01JABC"
-
 
 @pytest.mark.asyncio
 async def test_place_order_includes_idempotency_header() -> None:
@@ -181,7 +173,6 @@ async def test_place_order_includes_idempotency_header() -> None:
     assert receipt.signed_by == "key_0xABCD"
     assert receipt.timestamp.tzinfo is not None
 
-
 @pytest.mark.asyncio
 async def test_place_order_rejects_invalid_size() -> None:
     """place_order should reject non-positive sizes client-side."""
@@ -196,7 +187,6 @@ async def test_place_order_rejects_invalid_size() -> None:
                 side=OrderSide.YES,
                 size_usd=0.0,
             )
-
 
 @pytest.mark.asyncio
 async def test_get_settlements_filters_by_since() -> None:
@@ -223,7 +213,6 @@ async def test_get_settlements_filters_by_since() -> None:
     assert s.evidence_hashes == ["bafyabc123", "bafydef456"]
     assert s.resolved_at.tzinfo is not None
 
-
 @pytest.mark.asyncio
 async def test_cancel_order_returns_true_on_200() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
@@ -236,7 +225,6 @@ async def test_cancel_order_returns_true_on_200() -> None:
 
     assert result is True
 
-
 @pytest.mark.asyncio
 async def test_auth_error_on_401() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
@@ -245,7 +233,6 @@ async def test_auth_error_on_401() -> None:
     async with _make_client(handler) as client:
         with pytest.raises(DelphiAuthError):
             await client.get_market("dphi_01JABC")
-
 
 @pytest.mark.asyncio
 async def test_not_found_error_on_404() -> None:
@@ -256,7 +243,6 @@ async def test_not_found_error_on_404() -> None:
         with pytest.raises(DelphiNotFoundError):
             await client.get_market("dphi_unknown")
 
-
 @pytest.mark.asyncio
 async def test_generic_api_error_on_500() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
@@ -266,7 +252,6 @@ async def test_generic_api_error_on_500() -> None:
         # 500 is retried 3x then re-raised as DelphiAPIError.
         with pytest.raises(DelphiAPIError):
             await client.get_market("dphi_01JABC")
-
 
 @pytest.mark.asyncio
 async def test_get_orderbook_parses_response() -> None:

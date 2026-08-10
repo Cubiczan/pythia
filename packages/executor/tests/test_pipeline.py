@@ -32,7 +32,6 @@ from pythia_executor import ExecutorConfig, PythiaExecutor
 # Test doubles
 # ---------------------------------------------------------------------------
 
-
 class StubAnalyst:
     """Minimal stand-in for BaseAnalyst that returns a pre-configured Estimate."""
 
@@ -52,7 +51,6 @@ class StubAnalyst:
             )
         return self._estimate
 
-
 class StubConsensusEngine:
     """Stand-in for ConsensusEngine that returns a pre-configured decision."""
 
@@ -66,7 +64,6 @@ class StubConsensusEngine:
 
     def decide(self, estimates: Any) -> ConsensusDecision:
         return self._decision
-
 
 class StubRiskEngine:
     """Stand-in for RiskEngine that returns a pre-configured TradePlan."""
@@ -88,7 +85,6 @@ class StubRiskEngine:
 
     def update_state(self, receipt: RiskTradeReceipt) -> None:
         self.update_state_calls.append(receipt)
-
 
 class StubDelphiClient:
     """Stand-in for DelphiClient that tracks place_order calls."""
@@ -132,11 +128,9 @@ class StubDelphiClient:
     async def aclose(self) -> None:
         pass
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
 
 def _make_market() -> AdapterMarket:
     return AdapterMarket(
@@ -154,7 +148,6 @@ def _make_market() -> AdapterMarket:
         arbiter_model="gpt-4o-mini",
     )
 
-
 def _make_estimate(analyst_id: str, prob: float = 0.7) -> Estimate:
     return Estimate(
         market_id="dphi_test_001",
@@ -164,7 +157,6 @@ def _make_estimate(analyst_id: str, prob: float = 0.7) -> Estimate:
         evidence=[],
         analyst_id=analyst_id,
     )
-
 
 def _make_decision(gate: str = "trade", prob: float = 0.7) -> ConsensusDecision:
     return ConsensusDecision(
@@ -178,7 +170,6 @@ def _make_decision(gate: str = "trade", prob: float = 0.7) -> ConsensusDecision:
         timestamp=datetime.now(UTC).isoformat(),
     )
 
-
 def _make_plan(decision: str = "APPROVE") -> TradePlan:
     return TradePlan(
         market_id="dphi_test_001",
@@ -191,14 +182,12 @@ def _make_plan(decision: str = "APPROVE") -> TradePlan:
         timestamp=datetime.now(UTC).isoformat(),
     )
 
-
 def _make_consensus_config(min_analysts: int = 2) -> ConsensusConfig:
     return ConsensusConfig(
         method="logit-mean",
         agreement_threshold=0.65,
         min_analysts=min_analysts,
     )
-
 
 def _make_executor(
     *,
@@ -240,11 +229,9 @@ def _make_executor(
     )
     return executor, client, risk_engine
 
-
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
-
 
 @pytest.mark.asyncio
 async def test_paper_mode_does_not_submit(tmp_path: Path) -> None:
@@ -261,7 +248,6 @@ async def test_paper_mode_does_not_submit(tmp_path: Path) -> None:
     assert result.receipt.status == "PAPER"
     assert result.receipt.signed_by == "paper-mode"
     assert result.receipt.att_order_id.startswith("paper-")
-
 
 @pytest.mark.asyncio
 async def test_live_mode_submits_with_signature(
@@ -295,7 +281,6 @@ async def test_live_mode_submits_with_signature(
     assert isinstance(sig, str)
     assert len(sig) > 0
 
-
 @pytest.mark.asyncio
 async def test_skips_when_insufficient_analysts(tmp_path: Path) -> None:
     """When the mesh returns < min_analysts estimates, we skip early."""
@@ -318,7 +303,6 @@ async def test_skips_when_insufficient_analysts(tmp_path: Path) -> None:
     assert len(result.estimates) == 1
     assert client.place_order_calls == []
 
-
 @pytest.mark.asyncio
 async def test_skips_when_gate_is_skip(tmp_path: Path) -> None:
     """When consensus returns gate='skip', we skip before risk evaluation."""
@@ -338,7 +322,6 @@ async def test_skips_when_gate_is_skip(tmp_path: Path) -> None:
     assert result.plan is None
     assert result.receipt is None
     assert client.place_order_calls == []
-
 
 @pytest.mark.asyncio
 async def test_skips_when_risk_rejects(tmp_path: Path) -> None:
@@ -362,7 +345,6 @@ async def test_skips_when_risk_rejects(tmp_path: Path) -> None:
     assert result.plan.decision == "REJECT"
     assert result.receipt is None
     assert client.place_order_calls == []
-
 
 @pytest.mark.asyncio
 async def test_audit_log_written(tmp_path: Path) -> None:

@@ -18,7 +18,6 @@ from pythia_analyst_mesh.types import MarketContext
 # Fixtures
 # --------------------------------------------------------------------- #
 
-
 @pytest.fixture
 def llm_config() -> LLMConfig:
     return LLMConfig(
@@ -28,7 +27,6 @@ def llm_config() -> LLMConfig:
         temperature=0.2,
         max_tokens=64,
     )
-
 
 @pytest.fixture
 def sample_market() -> MarketContext:
@@ -43,11 +41,9 @@ def sample_market() -> MarketContext:
         closes_at="2026-12-31T23:59:59Z",
     )
 
-
 # --------------------------------------------------------------------- #
 # Tests
 # --------------------------------------------------------------------- #
-
 
 def test_builtin_analysts_auto_registered():
     reg = AnalystRegistry()
@@ -58,7 +54,6 @@ def test_builtin_analysts_auto_registered():
     assert "niche" in known
     assert len(known) >= 4
 
-
 def test_get_returns_class_not_instance(llm_config):
     reg = AnalystRegistry()
     cls = reg.get("politics")
@@ -68,12 +63,10 @@ def test_get_returns_class_not_instance(llm_config):
     assert isinstance(inst, BaseAnalyst)
     assert inst.analyst_id == "politics"
 
-
 def test_get_unknown_raises():
     reg = AnalystRegistry()
     with pytest.raises(KeyError, match="unknown analyst"):
         reg.get("nonexistent")
-
 
 def test_register_new_analyst():
     class MacroAnalyst(BaseAnalyst):
@@ -90,13 +83,11 @@ def test_register_new_analyst():
     assert "macro" in reg.list_known()
     assert reg.get("macro") is MacroAnalyst
 
-
 def test_register_rejects_non_baseanalyst():
     """Passing a non-BaseAnalyst class should raise TypeError."""
     reg = AnalystRegistry()
     with pytest.raises(TypeError):
         reg.register("bogus", object)  # type: ignore[arg-type]
-
 
 def test_register_rejects_class_without_attributes():
     """A BaseAnalyst subclass that doesn't set analyst_id should fail."""
@@ -112,12 +103,10 @@ def test_register_rejects_class_without_attributes():
     with pytest.raises(ValueError):
         reg.register("halfbaked", HalfBaked)
 
-
 def test_register_rejects_empty_name():
     reg = AnalystRegistry()
     with pytest.raises(ValueError):
         reg.register("", PoliticsAnalyst)
-
 
 def test_build_mesh_returns_instances(llm_config):
     reg = AnalystRegistry()
@@ -129,18 +118,15 @@ def test_build_mesh_returns_instances(llm_config):
     # Shared config
     assert all(a._llm_config is llm_config for a in mesh)
 
-
 def test_build_mesh_deduplicates(llm_config):
     reg = AnalystRegistry()
     mesh = reg.build_mesh(["politics", "politics", "crypto"], llm_config)
     assert len(mesh) == 2
 
-
 def test_build_mesh_unknown_raises(llm_config):
     reg = AnalystRegistry()
     with pytest.raises(KeyError, match="unknown analysts"):
         reg.build_mesh(["politics", "nonexistent"], llm_config)
-
 
 def test_build_mesh_all_four(llm_config):
     reg = AnalystRegistry()
@@ -149,13 +135,11 @@ def test_build_mesh_all_four(llm_config):
     ids = {a.analyst_id for a in mesh}
     assert ids == {"politics", "crypto", "sports", "niche"}
 
-
 def test_contains_and_len():
     reg = AnalystRegistry()
     assert "politics" in reg
     assert "nonexistent" not in reg
     assert len(reg) >= 4
-
 
 def test_getitem_alias_for_get():
     reg = AnalystRegistry()

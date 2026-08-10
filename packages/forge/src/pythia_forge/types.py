@@ -8,7 +8,7 @@ These are the data contracts that flow in and out of the backtest harness:
 
 The strategy TOML is parsed into the sibling packages' own config types
 (``ConsensusConfig`` from pythia-consensus, ``RiskConfig`` from pythia-risk,
-and the mesh's ``LLMConfig`` + analyst list from pythia-analyst-mesh) —
+and the mesh's ``LLMConfig`` + analyst list from pythia-analyst-mesh) 
 ``BacktestConfig`` only holds the *path* to the strategy TOML plus the
 backtest-specific knobs.
 """
@@ -24,7 +24,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # ---------------------------------------------------------------------------
 # Historical market — one row of the resolved-markets JSON fixture.
 # ---------------------------------------------------------------------------
-
 
 class HistoricalMarket(BaseModel):
     """A resolved Delphi market, as recorded by the ATT archive.
@@ -98,11 +97,9 @@ class HistoricalMarket(BaseModel):
             return v.replace(tzinfo=UTC)
         return v
 
-
 # ---------------------------------------------------------------------------
 # Backtest config — what to backtest.
 # ---------------------------------------------------------------------------
-
 
 class BacktestConfig(BaseModel):
     """Configuration for a single backtest run.
@@ -154,11 +151,9 @@ class BacktestConfig(BaseModel):
     def _markets_must_exist(cls, v: Path) -> Path:
         return v.resolve() if v.is_absolute() else v
 
-
 # ---------------------------------------------------------------------------
 # Backtest result — aggregated output.
 # ---------------------------------------------------------------------------
-
 
 class BacktestResult(BaseModel):
     """Aggregated output of a backtest run.
@@ -210,7 +205,6 @@ class BacktestResult(BaseModel):
     brier_scores: dict[str, float]
     per_category_stats: dict[str, dict[str, Any]]
     equity_curve: list[tuple[datetime, float]]
-
 
 __all__ = [
     "BacktestConfig",

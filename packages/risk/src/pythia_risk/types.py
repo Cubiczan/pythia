@@ -47,11 +47,9 @@ except Exception:  # noqa: BLE001 - we want to swallow any import failure
         method: str = "logit-mean"
         timestamp: str = ""
 
-
 # --- Sizing & rule types -------------------------------------------------------
 
 SizingMethod = Literal["kelly-fractional", "fixed"]
-
 
 class MarketTypeRules(BaseModel):
     """Per-category risk rules (politics / crypto / sports / niche / subjective)."""
@@ -60,7 +58,6 @@ class MarketTypeRules(BaseModel):
 
     max_stake_usd: float = Field(..., gt=0.0, description="Hard cap on stake for this category.")
     allowed: bool = Field(True, description="Whether the bot may trade this category at all.")
-
 
 # --- Core config & state -------------------------------------------------------
 
@@ -82,7 +79,6 @@ class RiskConfig(BaseModel):
     cool_down_min_after_loss: float = Field(..., ge=0.0, description="Wall-clock minutes to pause trading after a loss.")
     market_type_rules: dict[str, MarketTypeRules] = Field(default_factory=dict)
 
-
 class BankrollState(BaseModel):
     """Snapshot of the bot's capital position.
 
@@ -103,7 +99,6 @@ class BankrollState(BaseModel):
     drawdown_pct: float = Field(0.0, ge=0.0, le=100.0)
     last_loss_at: Optional[datetime] = None
 
-
 # --- Market & trade outputs ----------------------------------------------------
 
 class Market(BaseModel):
@@ -123,7 +118,6 @@ class Market(BaseModel):
     question: str = ""
     close_date: Optional[datetime] = None
 
-
 class TradePlan(BaseModel):
     """Output of ``RiskEngine.evaluate``.
 
@@ -141,7 +135,6 @@ class TradePlan(BaseModel):
     risk_flags: list[str] = Field(default_factory=list)
     decision: Literal["APPROVE", "REJECT"]
     timestamp: str = ""
-
 
 class TradeReceipt(BaseModel):
     """Confirmation of a filled trade (produced by pythia-executor).

@@ -34,7 +34,6 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 class AuditEntry(BaseModel):
     """One record in the audit log — the full decision chain for one market.
 
@@ -177,7 +176,6 @@ class AuditEntry(BaseModel):
                 return str(meta["category"])
         return None
 
-
 class PnLMilestone(BaseModel):
     """One point on the cumulative P&L curve — one per executed trade.
 
@@ -202,7 +200,6 @@ class PnLMilestone(BaseModel):
         ge=0.0,
         description="Current drawdown from peak bankroll, in percent (0..100).",
     )
-
 
 class AchievementCondition(BaseModel):
     """One condition inside an `Achievement`.
@@ -242,7 +239,6 @@ class AchievementCondition(BaseModel):
         description="Market category filter (wins_in_category).",
     )
 
-
 class Achievement(BaseModel):
     """One milestone that Pythia can unlock.
 
@@ -268,7 +264,6 @@ class Achievement(BaseModel):
         default=None,
         description="Actual value that met the condition (for UI display).",
     )
-
 
 __all__ = [
     "Achievement",

@@ -43,7 +43,7 @@ Three reasons:
 ## Install
 
 ```bash
-# from source (recommended for the hackathon)
+# from source (recommended for development)
 git clone https://github.com/icohangar-ops/pythia.git
 cd pythia/packages/delphi-adapter
 cd packages/delphi-adapter
@@ -212,7 +212,7 @@ packages/delphi-adapter/
 
 ## ATT-specific assumptions (read before going live)
 
-This is a scaffold. The ATT HTTP/WebSocket API surface is inferred from [Gensyn's public docs](https://docs.gensyn.ai/tech/agentic-trading) and the `gensyn-ai/gensyn-delphi-skills` repo. The following items are marked `# VERIFY:` in the source and should be confirmed against the live ATT before trading real size:
+This is a reference implementation. The ATT HTTP/WebSocket API surface is inferred from [Gensyn's public docs](https://docs.gensyn.ai/tech/agentic-trading) and the `gensyn-ai/gensyn-delphi-skills` repo. The following items are marked `# VERIFY:` in the source and should be confirmed against the live ATT before trading real size:
 
 1. **Base URL** — assumed `https://api.delphi.gensyn.ai`. Confirm against the ATT quickstart.
 2. **Auth header** — assumed `Authorization: Bearer <api_key>`. May instead be `X-Delphi-Api-Key`.

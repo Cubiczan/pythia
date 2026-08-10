@@ -4,7 +4,6 @@ from __future__ import annotations
 from ..base import BaseAnalyst
 from ..types import ChatMessage, MarketContext
 
-
 class CryptoAnalyst(BaseAnalyst):
     """Specialist for crypto / DeFi markets.
 

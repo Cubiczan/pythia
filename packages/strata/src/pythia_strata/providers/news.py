@@ -12,7 +12,7 @@ should call the chosen news API and parse the response into
 # VERIFY: which news API to wire up. Candidates, in rough order of
 preference:
   - GDELT (free, no key, broad coverage, rate-limited) — preferred default
-    for the hackathon. Endpoint: https://api.gdeltproject.org/api/v2/doc/doc
+    for development use. Endpoint: https://api.gdeltproject.org/api/v2/doc/doc
   - NewsAPI.org (free tier 100 req/day, requires key, good headline coverage)
   - Bing News Search v7 (Azure Cognitive Services, requires key)
   - AlphaVantage News & Sentiment (free, financial focus, requires key)
@@ -36,7 +36,6 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
-
 
 class NewsProvider:
     """Fetches recent news articles relevant to a market question.
@@ -142,6 +141,5 @@ class NewsProvider:
             query[:80],
         )
         return []
-
 
 __all__ = ["NewsProvider"]

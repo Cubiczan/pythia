@@ -48,11 +48,9 @@ logger = logging.getLogger("pythia_forge")
 DEFAULT_THRESHOLDS = [0.50, 0.60, 0.65, 0.70, 0.80]
 DEFAULT_KELLY_FRACTIONS = [0.10, 0.25, 0.50, 1.00]
 
-
 # ---------------------------------------------------------------------------
 # backtest subcommand
 # ---------------------------------------------------------------------------
-
 
 def _cmd_backtest(args: argparse.Namespace) -> int:
     """Run a single backtest and write the report."""
@@ -106,11 +104,9 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
 
     return 0
 
-
 # ---------------------------------------------------------------------------
 # tune subcommand
 # ---------------------------------------------------------------------------
-
 
 def _cmd_tune(args: argparse.Namespace) -> int:
     """Grid-search consensus threshold × Kelly fraction, find best by Sharpe."""
@@ -195,7 +191,6 @@ def _cmd_tune(args: argparse.Namespace) -> int:
 
     return 0
 
-
 def _write_best_strategy_toml(
     path: Path,
     base_toml: dict[str, Any],
@@ -261,16 +256,14 @@ def _write_best_strategy_toml(
 
     path.write_text("\n".join(lines), encoding="utf-8")
 
-
 # ---------------------------------------------------------------------------
 # deploy subcommand
 # ---------------------------------------------------------------------------
 
-
 def _cmd_deploy(args: argparse.Namespace) -> int:
     """CI deploy hook: validate config, smoke test, emit deploy plan.
 
-    This is a scaffold — the actual runner-deploy step is delegated to
+    This is a reference implementation — the actual runner-deploy step is delegated to
     icohangar-ops/forge's deploy primitive once vendored (currently a stub
     that prints a plan). Marked with # VERIFY throughout.
     """
@@ -398,11 +391,9 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
 
     return 0
 
-
 # ---------------------------------------------------------------------------
 # argparse wiring
 # ---------------------------------------------------------------------------
-
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level pythia-forge CLI parser."""
@@ -479,7 +470,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     return parser
 
-
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point — dispatched by the `pythia-forge` console script."""
     parser = build_parser()
@@ -498,7 +488,6 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     return int(args.func(args))
-
 
 if __name__ == "__main__":
     sys.exit(main())

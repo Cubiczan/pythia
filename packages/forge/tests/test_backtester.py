@@ -18,11 +18,9 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 STRATEGY_PATH = FIXTURES / "strategy.toml"
 MARKETS_PATH = FIXTURES / "resolved_markets_sample.json"
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
 
 @pytest.fixture
 def backtest_config() -> BacktestConfig:
@@ -37,11 +35,9 @@ def backtest_config() -> BacktestConfig:
         },
     )
 
-
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
-
 
 class TestBacktestResultTypes:
     """Verify the BacktestResult has the correct field types."""
@@ -66,7 +62,6 @@ class TestBacktestResultTypes:
     async def test_starting_capital_preserved(self, backtest_config: BacktestConfig) -> None:
         result = await Backtester(backtest_config).run()
         assert result.starting_capital_usd == 1000.0
-
 
 class TestTradeCount:
     """Verify total_trades is sane."""
@@ -105,7 +100,6 @@ class TestTradeCount:
         assert isinstance(ts, datetime)
         assert val == pytest.approx(1000.0, rel=1e-6)
 
-
 class TestBrierScores:
     """Verify per-analyst Brier scores are computed for every analyst."""
 
@@ -141,7 +135,6 @@ class TestBrierScores:
         for aid in result.brier_scores:
             assert aid in configured, f"unexpected analyst_id in brier_scores: {aid!r}"
 
-
 class TestPerCategoryStats:
     """Verify per-category breakdown is populated."""
 
@@ -176,7 +169,6 @@ class TestPerCategoryStats:
                 f"category counts sum to {total}, but total_trades={result.total_trades}"
             )
 
-
 class TestMetricsSanity:
     """Sanity-check the computed metrics."""
 
@@ -210,7 +202,6 @@ class TestMetricsSanity:
             _, last_val = result.equity_curve[-1]
             assert result.ending_capital_usd == pytest.approx(last_val, rel=1e-6)
 
-
 class TestRunBacktestConvenience:
     """Verify the top-level run_backtest() convenience function."""
 
@@ -221,7 +212,6 @@ class TestRunBacktestConvenience:
         result = await run_backtest(backtest_config)
         assert isinstance(result, BacktestResult)
         assert result.starting_capital_usd == 1000.0
-
 
 class TestEdgeCases:
     """Edge-case handling."""

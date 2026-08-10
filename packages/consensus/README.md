@@ -49,7 +49,7 @@ and tested without it.
 
 ## Install
 
-### From source (recommended for the hackathon)
+### From source (recommended for development)
 
 ```bash
 git clone https://github.com/icohangar-ops/pythia.git

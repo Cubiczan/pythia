@@ -99,7 +99,7 @@ pip install pythia-forge
 ```
 
 Requires Python ≥ 3.11. The sibling packages (`pythia-delphi-adapter`,
-`pythia-analyst-mesh`, `pythia-consensus`, `pythia-risk`) must be importable —
+`pythia-analyst-mesh`, `pythia-consensus`, `pythia-risk`) must be importable 
 they are listed as hard dependencies.
 
 ---

@@ -4,7 +4,6 @@ from __future__ import annotations
 from ..base import BaseAnalyst
 from ..types import ChatMessage, MarketContext
 
-
 class NicheAnalyst(BaseAnalyst):
     """Specialist for subjective / cultural / niche markets.
 

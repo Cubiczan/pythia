@@ -28,11 +28,9 @@ from typing import Any
 from pythia_delphi_adapter.config import load_config
 from pythia_delphi_adapter.models import MarketCategory, MarketStatus, OrderSide
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
 
 def _parse_since(since: str) -> datetime:
     """Parse a ``--since`` value like ``24h``, ``30m``, or an ISO-8601 ts."""
@@ -49,7 +47,6 @@ def _parse_since(since: str) -> datetime:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed
 
-
 def _print_json(obj: Any) -> None:
     """Pretty-print a pydantic model / dict / list as JSON to stdout."""
     if hasattr(obj, "model_dump_json"):
@@ -62,7 +59,6 @@ def _print_json(obj: Any) -> None:
     else:
         print(json.dumps(obj, indent=2, default=str))
 
-
 def _build_client(args: argparse.Namespace):
     """Construct a ``DelphiClient`` from CLI args + env / TOML config."""
     from pythia_delphi_adapter.client import DelphiClient
@@ -73,11 +69,9 @@ def _build_client(args: argparse.Namespace):
     )
     return DelphiClient(api_key=cfg.api_key, endpoint=cfg.endpoint)
 
-
 # ---------------------------------------------------------------------------
 # Subcommand implementations
 # ---------------------------------------------------------------------------
-
 
 async def cmd_markets_list(args: argparse.Namespace) -> int:
     status: MarketStatus | None = None
@@ -110,13 +104,11 @@ async def cmd_markets_list(args: argparse.Namespace) -> int:
         _print_json(markets)
     return 0
 
-
 async def cmd_markets_get(args: argparse.Namespace) -> int:
     async with _build_client(args) as client:
         market = await client.get_market(args.market_id)
         _print_json(market)
     return 0
-
 
 async def cmd_positions(args: argparse.Namespace) -> int:
     async with _build_client(args) as client:
@@ -124,14 +116,12 @@ async def cmd_positions(args: argparse.Namespace) -> int:
         _print_json(positions)
     return 0
 
-
 async def cmd_settlements(args: argparse.Namespace) -> int:
     since = _parse_since(args.since) if args.since else None
     async with _build_client(args) as client:
         settlements = await client.get_settlements(since=since)
         _print_json(settlements)
     return 0
-
 
 async def cmd_paper_order(args: argparse.Namespace) -> int:
     """Construct and print the order payload — do NOT submit.
@@ -166,11 +156,9 @@ async def cmd_paper_order(args: argparse.Namespace) -> int:
     _print_json(payload)
     return 0
 
-
 # ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -227,7 +215,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     return parser
 
-
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -245,7 +232,6 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # noqa: BLE001
         print(f"error: {exc}", file=sys.stderr)
         return 1
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

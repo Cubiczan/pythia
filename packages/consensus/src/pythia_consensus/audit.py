@@ -40,7 +40,6 @@ except ImportError:  # pragma: no cover - exercised only when upstream not vendo
     _UpstreamSignedDecision = None  # type: ignore[assignment, misc]
     _UPSTREAM_AVAILABLE = False
 
-
 def _canonical_payload(decision: ConsensusDecision) -> dict[str, Any]:
     """Canonical, sorted-key dict representation used for hashing / signing.
 
@@ -54,7 +53,6 @@ def _canonical_payload(decision: ConsensusDecision) -> dict[str, Any]:
     payload = decision.model_dump(mode="json")
     return payload  # type: ignore[return-value]
 
-
 def _stub_signature(decision: ConsensusDecision) -> str:
     """Deterministic SHA-256 over the canonical JSON of the decision.
 
@@ -66,7 +64,6 @@ def _stub_signature(decision: ConsensusDecision) -> str:
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return f"stub:sha256:{digest}"
-
 
 class AuditSigner:
     """Signs `ConsensusDecision` records for the audit trail.
@@ -137,6 +134,5 @@ class AuditSigner:
         # Upstream importable but neither shape worked — fall back to stub,
         # but flag it so the audit log is honest about provenance.
         return _stub_signature(decision)
-
 
 __all__ = ["AuditSigner"]

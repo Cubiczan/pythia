@@ -28,11 +28,9 @@ from .types import LLMConfig, MarketContext
 
 logger = logging.getLogger("pythia_analyst_mesh.cli")
 
-
 # --------------------------------------------------------------------- #
 # Subcommands
 # --------------------------------------------------------------------- #
-
 
 def cmd_list(args: argparse.Namespace) -> int:
     registry = AnalystRegistry()
@@ -41,7 +39,6 @@ def cmd_list(args: argparse.Namespace) -> int:
         cls = registry.get(name)
         print(f"  {name:<10}  {cls.__name__}  ({cls.specialty})")
     return 0
-
 
 def cmd_estimate(args: argparse.Namespace) -> int:
     # ---- Build LLMConfig from flags / env. ----
@@ -95,7 +92,6 @@ def cmd_estimate(args: argparse.Namespace) -> int:
     print(json.dumps(out, indent=2, default=str))
     return 0
 
-
 async def _fetch_market(market_id: str) -> MarketContext:
     """Fetch market via ``pythia_delphi_adapter.DelphiClient``.
 
@@ -104,7 +100,7 @@ async def _fetch_market(market_id: str) -> MarketContext:
     lets the mesh still be exercised.
 
     # VERIFY: DelphiClient.get_market return shape pending pythia-delphi-adapter
-    # scaffold. Currently assumed to return a dict with at least:
+    # reference implementation. Currently assumed to return a dict with at least:
     #   market_id, question, category, metadata, yes_price, no_price,
     #   volume_usd, closes_at
     """
@@ -131,7 +127,6 @@ async def _fetch_market(market_id: str) -> MarketContext:
         closes_at=raw.get("closes_at"),
     )
 
-
 def _stub_market(market_id: str) -> MarketContext:
     """Minimal market so the mesh can be exercised without the adapter."""
     return MarketContext(
@@ -145,11 +140,9 @@ def _stub_market(market_id: str) -> MarketContext:
         closes_at=None,
     )
 
-
 # --------------------------------------------------------------------- #
 # Argparse wiring
 # --------------------------------------------------------------------- #
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -186,7 +179,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     return parser
 
-
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -202,7 +194,6 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     return int(args.func(args) or 0)
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

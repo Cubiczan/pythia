@@ -155,7 +155,6 @@ from pythia_strata import (
     SocialProvider,
 )
 
-
 async def main() -> None:
     async with DelphiClient(api_key="dphi_live_...") as delphi:
         markets = await delphi.list_markets(status=MarketStatus.OPEN, limit=5)
@@ -176,7 +175,6 @@ async def main() -> None:
         # Convert to the MarketContext the analyst mesh expects:
         context = enricher.to_market_context(enriched)
         # → pass `context` to pythia_analyst_mesh.run_mesh(context, analysts)
-
 
 asyncio.run(main())
 ```

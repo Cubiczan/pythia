@@ -22,7 +22,6 @@ import pytest
 
 from pythia_strata.providers import NewsProvider, OnChainProvider, SocialProvider
 
-
 # ---------------------------------------------------------------------------
 # NewsProvider
 # ---------------------------------------------------------------------------
@@ -43,7 +42,7 @@ class TestNewsProviderStub:
         assert await provider.fetch("\t\n", limit=5) == []
 
     async def test_returns_empty_when_api_key_set_but_no_upstream(self) -> None:
-        # API key is set, but the stub wired-up path isn't implemented yet —
+        # API key is set, but the stub wired-up path isn't implemented yet 
         # provider should warn + return [] rather than crash.
         provider = NewsProvider(api_key="fake-key")
         result = await provider.fetch("ethereum merge", limit=5)
@@ -56,7 +55,6 @@ class TestNewsProviderStub:
         provider = NewsProvider()
         result = await provider.fetch("anything")
         assert result == []
-
 
 # ---------------------------------------------------------------------------
 # OnChainProvider
@@ -83,7 +81,6 @@ class TestOnChainProviderStub:
         result = await provider.fetch("ETH")
         assert isinstance(result, list)
 
-
 # ---------------------------------------------------------------------------
 # SocialProvider
 # ---------------------------------------------------------------------------
@@ -108,7 +105,6 @@ class TestSocialProviderStub:
         provider = SocialProvider()
         result = await provider.fetch("anything")
         assert result == []
-
 
 # ---------------------------------------------------------------------------
 # Cross-provider: all three obey the soft-fail contract

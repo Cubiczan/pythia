@@ -44,7 +44,6 @@ from pythia_strata.types import Market
 # Test fixtures
 # ---------------------------------------------------------------------------
 
-
 def _make_market(
     *,
     market_id: str = "delphi-2026-eth-above-4k",
@@ -81,7 +80,6 @@ def _make_market(
         }
     )
 
-
 def _make_politics_market() -> Market:
     return _make_market(
         market_id="delphi-2026-election",
@@ -93,11 +91,9 @@ def _make_politics_market() -> Market:
         closes_at="2026-11-04T20:00:00+00:00",
     )
 
-
 # ---------------------------------------------------------------------------
 # enrich() with all-stub providers
 # ---------------------------------------------------------------------------
-
 
 class TestEnrichWithStubs:
     async def test_returns_enriched_market_with_empty_lists(self) -> None:
@@ -156,11 +152,9 @@ class TestEnrichWithStubs:
         assert enriched.news == []
         assert enriched.social == []
 
-
 # ---------------------------------------------------------------------------
 # to_market_context() conversion
 # ---------------------------------------------------------------------------
-
 
 class TestToMarketContext:
     async def test_basic_conversion(self) -> None:
@@ -309,11 +303,9 @@ class TestToMarketContext:
         # news_context rollup should mention the headline.
         assert "ETH breaks $4k resistance" in ctx.metadata["news_context"]
 
-
 # ---------------------------------------------------------------------------
 # Keyword / token extraction helpers
 # ---------------------------------------------------------------------------
-
 
 class TestExtractKeywords:
     def test_strips_stopwords(self) -> None:
@@ -351,7 +343,6 @@ class TestExtractKeywords:
         assert "c" not in kw
         assert "real" in kw
 
-
 class TestIsCryptoMarket:
     def test_crypto_category(self) -> None:
         m = _make_market(category="CRYPTO")
@@ -375,7 +366,6 @@ class TestIsCryptoMarket:
         )
         assert MarketEnricher._is_crypto_market(m) is False
 
-
 class TestExtractTokenSymbol:
     def test_dollar_ticker(self) -> None:
         m = _make_market(question="Will $ETH close above $4,000?")
@@ -394,11 +384,9 @@ class TestExtractTokenSymbol:
         m = _make_market(question="Will $ETH outperform ETH staking yields?")
         assert MarketEnricher._extract_token_symbol(m) == "ETH"
 
-
 # ---------------------------------------------------------------------------
 # Soft-fail: provider that raises is converted to []
 # ---------------------------------------------------------------------------
-
 
 class _RaisingNewsProvider(NewsProvider):
     """A NewsProvider whose fetch() always raises — used to test soft-fail."""
@@ -406,16 +394,13 @@ class _RaisingNewsProvider(NewsProvider):
     async def fetch(self, query: str, limit: int = 5) -> list[NewsArticle]:
         raise RuntimeError("simulated upstream failure")
 
-
 class _RaisingOnChainProvider(OnChainProvider):
     async def fetch(self, token_symbol: str | None = None) -> list[OnChainMetric]:
         raise ConnectionError("simulated on-chain API outage")
 
-
 class _RaisingSocialProvider(SocialProvider):
     async def fetch(self, query: str, limit: int = 5) -> list[SocialSignal]:
         raise ValueError("simulated social API parse failure")
-
 
 class TestSoftFail:
     async def test_raising_news_provider_yields_empty_news(self) -> None:
@@ -468,11 +453,9 @@ class TestSoftFail:
         assert enriched.social == []
         assert enriched.enriched_at  # timestamp still set
 
-
 # ---------------------------------------------------------------------------
 # Helper function tests
 # ---------------------------------------------------------------------------
-
 
 class TestCoerceToList:
     def test_returns_list_unchanged(self) -> None:
@@ -506,7 +489,6 @@ class TestCoerceToList:
         result = _coerce_to_list(42, NewsArticle, "news", "mkt-1")
         assert result == []
 
-
 class TestCategoryStr:
     def test_plain_string(self) -> None:
         m = _make_market(category="CRYPTO")
@@ -532,7 +514,6 @@ class TestCategoryStr:
         # Either "CRYPTO" (string passthrough) or the enum's .value="CRYPTO"
         # — both are acceptable as long as it's the plain string.
         assert result == "CRYPTO"
-
 
 class TestClosesAtStr:
     def test_string_passthrough(self) -> None:
@@ -566,7 +547,6 @@ class TestClosesAtStr:
         result = _closes_at_str(FakeMarket())  # type: ignore[arg-type]
         # Should have a tz designator (UTC).
         assert "+00:00" in result
-
 
 class TestRollupNews:
     def test_empty_articles(self) -> None:

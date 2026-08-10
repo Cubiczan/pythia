@@ -18,7 +18,6 @@ from pythia_analyst_mesh.base import LLMCallError
 # Concrete test-only subclass
 # --------------------------------------------------------------------- #
 
-
 class StubAnalyst(BaseAnalyst):
     analyst_id = "stub"
     specialty = "test"
@@ -30,12 +29,10 @@ class StubAnalyst(BaseAnalyst):
             {"role": "user", "content": market.question},
         ]
 
-
 @pytest.fixture
 def analyst() -> StubAnalyst:
     cfg = LLMConfig(provider="ollama", model="llama3")
     return StubAnalyst(cfg)
-
 
 @pytest.fixture
 def market() -> MarketContext:
@@ -50,11 +47,9 @@ def market() -> MarketContext:
         closes_at="2026-12-31T23:59:59Z",
     )
 
-
 # --------------------------------------------------------------------- #
 # Constructor validation
 # --------------------------------------------------------------------- #
-
 
 def test_constructor_requires_analyst_id():
     class BadAnalyst(BaseAnalyst):
@@ -67,7 +62,6 @@ def test_constructor_requires_analyst_id():
     with pytest.raises(ValueError, match="analyst_id"):
         BadAnalyst(LLMConfig(provider="ollama", model="x"))
 
-
 def test_constructor_requires_specialty():
     class BadAnalyst(BaseAnalyst):
         analyst_id = "x"
@@ -79,11 +73,9 @@ def test_constructor_requires_specialty():
     with pytest.raises(ValueError, match="specialty"):
         BadAnalyst(LLMConfig(provider="ollama", model="x"))
 
-
 # --------------------------------------------------------------------- #
 # _parse_llm_response — valid JSON
 # --------------------------------------------------------------------- #
-
 
 def test_parse_valid_json(analyst, market):
     raw = json.dumps({
@@ -101,7 +93,6 @@ def test_parse_valid_json(analyst, market):
     assert est.evidence == ["https://example.com/a", "https://example.com/b"]
     # ISO timestamp
     datetime.fromisoformat(est.timestamp)
-
 
 def test_parse_valid_json_with_code_fences(analyst, market):
     raw = (
@@ -121,7 +112,6 @@ def test_parse_valid_json_with_code_fences(analyst, market):
     assert est.confidence == pytest.approx(0.6)
     assert est.rationale == "Fenced."
 
-
 def test_parse_valid_json_with_bare_fences(analyst, market):
     raw = (
         "```\n"
@@ -136,11 +126,9 @@ def test_parse_valid_json_with_bare_fences(analyst, market):
     est = analyst._parse_llm_response(raw, market)
     assert est.probability == pytest.approx(0.33)
 
-
 # --------------------------------------------------------------------- #
 # _parse_llm_response — partial / malformed JSON
 # --------------------------------------------------------------------- #
-
 
 def test_parse_json_with_prose_around_object(analyst, market):
     raw = (
@@ -158,7 +146,6 @@ def test_parse_json_with_prose_around_object(analyst, market):
     assert est.probability == pytest.approx(0.6)
     assert est.rationale == "Surrounded by prose."
 
-
 def test_parse_partial_json_missing_confidence(analyst, market):
     raw = json.dumps({
         "probability": 0.42,
@@ -171,7 +158,6 @@ def test_parse_partial_json_missing_confidence(analyst, market):
     assert est.confidence == pytest.approx(0.3)
     assert est.rationale == "Partial."
 
-
 def test_parse_partial_json_missing_rationale(analyst, market):
     raw = json.dumps({"probability": 0.5, "confidence": 0.5})
     est = analyst._parse_llm_response(raw, market)
@@ -179,14 +165,12 @@ def test_parse_partial_json_missing_rationale(analyst, market):
     # Missing rationale falls back to truncated raw text.
     assert isinstance(est.rationale, str) and len(est.rationale) > 0
 
-
 def test_parse_partial_json_missing_probability(analyst, market):
     raw = json.dumps({"confidence": 0.4, "rationale": "No prob."})
     est = analyst._parse_llm_response(raw, market)
     # Missing probability → default 0.5
     assert est.probability == pytest.approx(0.5)
     assert est.confidence == pytest.approx(0.4)
-
 
 def test_parse_partial_json_missing_evidence(analyst, market):
     raw = json.dumps({
@@ -196,7 +180,6 @@ def test_parse_partial_json_missing_evidence(analyst, market):
     })
     est = analyst._parse_llm_response(raw, market)
     assert est.evidence == []
-
 
 def test_parse_probability_out_of_range_clamped(analyst, market):
     raw = json.dumps({
@@ -208,7 +191,6 @@ def test_parse_probability_out_of_range_clamped(analyst, market):
     assert est.probability == pytest.approx(1.0)
     assert est.confidence == pytest.approx(0.0)
 
-
 def test_parse_evidence_as_csv_string(analyst, market):
     raw = json.dumps({
         "probability": 0.6,
@@ -219,11 +201,9 @@ def test_parse_evidence_as_csv_string(analyst, market):
     est = analyst._parse_llm_response(raw, market)
     assert est.evidence == ["https://a.com", "https://b.com"]
 
-
 # --------------------------------------------------------------------- #
 # _parse_llm_response — pure-prose fallbacks
 # --------------------------------------------------------------------- #
-
 
 def test_parse_pure_prose_with_leading_probability(analyst, market):
     raw = (
@@ -235,13 +215,11 @@ def test_parse_pure_prose_with_leading_probability(analyst, market):
     # Low confidence from fallback path.
     assert est.confidence == pytest.approx(0.3)
 
-
 def test_parse_pure_prose_with_percentage(analyst, market):
     raw = "I think there's a 42% chance of YES."
     est = analyst._parse_llm_response(raw, market)
     assert est.probability == pytest.approx(0.42)
     assert est.confidence == pytest.approx(0.3)
-
 
 def test_parse_pure_prose_no_number(analyst, market):
     raw = "I cannot determine this with any confidence."
@@ -251,12 +229,10 @@ def test_parse_pure_prose_no_number(analyst, market):
     assert est.confidence == pytest.approx(0.0)
     assert "uninformative prior" in est.rationale.lower() or "could not be parsed" in est.rationale.lower()
 
-
 def test_parse_empty_string(analyst, market):
     est = analyst._parse_llm_response("", market)
     assert est.probability == pytest.approx(0.5)
     assert est.confidence == pytest.approx(0.0)
-
 
 def test_parse_always_returns_estimate(analyst, market):
     """The contract: _parse_llm_response must NEVER raise."""
@@ -282,11 +258,9 @@ def test_parse_always_returns_estimate(analyst, market):
         assert est.market_id == "mkt-1"
         assert est.analyst_id == "stub"
 
-
 # --------------------------------------------------------------------- #
 # _call_llm provider dispatch (no real network — verify error path)
 # --------------------------------------------------------------------- #
-
 
 async def test_call_llm_unknown_provider_raises():
     """If we somehow bypass the Literal type, dispatch raises LLMCallError."""

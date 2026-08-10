@@ -41,17 +41,14 @@ except ImportError:  # pragma: no cover - exercised only when mesh isn't install
 
     ESTIMATE_SOURCE = "local-fallback"
 
-
 # ---------------------------------------------------------------------------
 # Consensus config + decision.
 # ---------------------------------------------------------------------------
 ConsensusMethod = Literal["logit-mean", "median", "trimmed-mean"]
 """Fusion method used by `fuse()`."""
 
-
 Gate = Literal["trade", "skip", "wait"]
 """Executor-facing decision gate."""
-
 
 class ConsensusConfig(BaseModel):
     """Configuration for the consensus fusion + gate.
@@ -81,7 +78,6 @@ class ConsensusConfig(BaseModel):
     min_analysts: int = Field(default=2, ge=1)
     weights: Optional[dict[str, float]] = None
 
-
 class ConsensusDecision(BaseModel):
     """The fused output of one consensus round.
 
@@ -99,7 +95,6 @@ class ConsensusDecision(BaseModel):
     method: ConsensusMethod
     weights_used: dict[str, float]
     timestamp: str  # ISO-8601
-
 
 __all__ = [
     "ConsensusConfig",

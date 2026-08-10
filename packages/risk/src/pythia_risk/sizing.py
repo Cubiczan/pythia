@@ -72,7 +72,6 @@ parameter.
 
 from __future__ import annotations
 
-
 def _compute_kelly_fraction(
     p_consensus: float,
     market_price: float,
@@ -123,10 +122,8 @@ def _compute_kelly_fraction(
 
     return fraction * clamped
 
-
 # Public alias — see module docstring "Naming note" for why this is aliased.
 kelly_fraction = _compute_kelly_fraction
-
 
 def size_trade_kelly(
     p_consensus: float,
@@ -177,7 +174,6 @@ def size_trade_kelly(
     stake = f * bankroll_usd
     stake = min(stake, max_stake_usd)
     return round(stake, 2)
-
 
 def size_trade_fixed(
     fixed_stake_usd: float,

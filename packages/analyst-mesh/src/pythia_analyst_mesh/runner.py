@@ -17,7 +17,6 @@ from .types import Estimate, MarketContext
 
 logger = logging.getLogger(__name__)
 
-
 async def run_mesh(
     market: MarketContext,
     analysts: Sequence[BaseAnalyst],

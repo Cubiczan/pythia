@@ -30,7 +30,6 @@ from pydantic import BaseModel, Field, field_validator
 
 from pythia_delphi_adapter.client import DEFAULT_ENDPOINT
 
-
 class DelphiConfig(BaseModel):
     """Resolved configuration for ``DelphiClient`` + ``SettlementListener``."""
 
@@ -51,7 +50,6 @@ class DelphiConfig(BaseModel):
         if not v or not v.strip():
             raise ValueError("api_key must not be empty")
         return v.strip()
-
 
 def load_config(
     env_var: str = "DELPHI_API_KEY",
@@ -136,6 +134,5 @@ def load_config(
         endpoint=str(endpoint),
         poll_interval_sec=poll_interval_sec,
     )
-
 
 __all__ = ["DelphiConfig", "load_config"]

@@ -12,7 +12,7 @@ pipeline:
                                                                      signed JSONL audit log
 ```
 
-This is the binary a Delphi Agent Arena operator actually runs. Everything
+This is the binary a Delphi mesh operator actually runs. Everything
 else in the monorepo (`pythia-delphi-adapter`, `pythia-analyst-mesh`,
 `pythia-consensus`, `pythia-risk`) is a library; this repo turns those
 libraries into a coherent, auditable, replayable trading bot.

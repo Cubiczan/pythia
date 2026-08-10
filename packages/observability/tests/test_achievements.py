@@ -29,18 +29,15 @@ FIXTURES = Path(__file__).parent / "fixtures"
 SAMPLE_LOG = FIXTURES / "sample_audit.jsonl"
 SAMPLE_ACH = FIXTURES / "sample_achievements.toml"
 
-
 def _cond(**kwargs) -> AchievementCondition:
     """Build an AchievementCondition with sensible defaults."""
     defaults = {"type": "trade_count", "op": ">=", "value": 1}
     defaults.update(kwargs)
     return AchievementCondition.model_validate(defaults)
 
-
 # --------------------------------------------------------------------------- #
 # Per-condition evaluators.
 # --------------------------------------------------------------------------- #
-
 
 class TestEvalTradeCount:
     def test_unlocked_when_meeting_threshold(self) -> None:
@@ -60,7 +57,6 @@ class TestEvalTradeCount:
         assert eval_trade_count({"total_trades": 10}, cond)[0] is False
         assert eval_trade_count({"total_trades": 11}, cond)[0] is True
 
-
 class TestEvalWinCount:
     def test_unlocked(self) -> None:
         cond = _cond(type="win_count", op=">=", value=1)
@@ -73,7 +69,6 @@ class TestEvalWinCount:
         unlocked, val = eval_win_count({"winning_trades": 0}, cond)
         assert unlocked is False
         assert val == 0
-
 
 class TestEvalWinStreak:
     def _entry(self, pnl: float | None) -> SimpleNamespace:
@@ -116,7 +111,6 @@ class TestEvalWinStreak:
         assert unlocked is False
         assert val == 0
 
-
 class TestEvalRealizedPnL:
     def test_unlocked_at_threshold(self) -> None:
         cond = _cond(type="realized_pnl_usd", op=">=", value=50)
@@ -141,7 +135,6 @@ class TestEvalRealizedPnL:
         unlocked, val = eval_realized_pnl_usd({"total_realized_pnl_usd": -15.0}, cond)
         assert unlocked is False
         assert val == -15.0
-
 
 class TestEvalBrierScore:
     def test_unlocked_under_threshold_with_min_trades_met(self) -> None:
@@ -179,7 +172,6 @@ class TestEvalBrierScore:
         assert unlocked is True
         assert val == 0.10
 
-
 class TestEvalDrawdownPct:
     def test_unlocked_when_under_threshold(self) -> None:
         cond = _cond(type="drawdown_pct", op="<=", value=5)
@@ -198,7 +190,6 @@ class TestEvalDrawdownPct:
         unlocked, val = eval_drawdown_pct({"current_drawdown_pct": 0.0}, cond)
         assert unlocked is True
         assert val == 0.0
-
 
 class TestEvalWinsInCategory:
     def _entry(self, pnl: float | None, category: str | None) -> SimpleNamespace:
@@ -248,7 +239,6 @@ class TestEvalWinsInCategory:
         assert unlocked is False
         assert val == 0
 
-
 class TestUnsupportedOperator:
     def test_raises_on_unknown_op(self) -> None:
         cond = _cond(type="trade_count", op="~=", value=10)
@@ -260,11 +250,9 @@ class TestUnsupportedOperator:
         with pytest.raises(ValueError, match="not numeric"):
             eval_trade_count({"total_trades": 10}, cond)
 
-
 # --------------------------------------------------------------------------- #
 # AchievementsEvaluator (end-to-end against the fixture).
 # --------------------------------------------------------------------------- #
-
 
 class TestAchievementsEvaluator:
     def test_loads_all_achievements_from_toml(self) -> None:

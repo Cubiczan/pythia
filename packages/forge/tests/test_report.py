@@ -19,7 +19,6 @@ from pythia_forge.types import BacktestResult
 # Fixtures
 # ---------------------------------------------------------------------------
 
-
 @pytest.fixture
 def mock_result() -> BacktestResult:
     """A realistic-looking BacktestResult for report testing."""
@@ -81,7 +80,6 @@ def mock_result() -> BacktestResult:
         ],
     )
 
-
 @pytest.fixture
 def empty_result() -> BacktestResult:
     """A zero-trade result for testing the empty case."""
@@ -99,11 +97,9 @@ def empty_result() -> BacktestResult:
         equity_curve=[(now, 1000.0)],
     )
 
-
 # ---------------------------------------------------------------------------
 # Report generation tests
 # ---------------------------------------------------------------------------
-
 
 class TestGenerateReport:
     """Verify generate_report writes the expected files."""
@@ -200,11 +196,9 @@ class TestGenerateReport:
         # The Brier table should note "no analysts".
         assert "no analysts" in content or "—" in content
 
-
 # ---------------------------------------------------------------------------
 # Equity-curve plotting tests
 # ---------------------------------------------------------------------------
-
 
 class TestPlotEquityCurve:
     """Verify the equity-curve PNG renderer."""
@@ -244,11 +238,9 @@ class TestPlotEquityCurve:
         )
         assert png_path.exists()
 
-
 # ---------------------------------------------------------------------------
 # BacktestResult model validation
 # ---------------------------------------------------------------------------
-
 
 class TestBacktestResultModel:
     """Verify the BacktestResult pydantic model enforces its contract."""

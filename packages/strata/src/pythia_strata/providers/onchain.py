@@ -33,7 +33,6 @@ from pythia_strata.types import OnChainMetric
 
 logger = logging.getLogger(__name__)
 
-
 class OnChainProvider:
     """Fetches on-chain metrics for a token (crypto-category markets only).
 
@@ -118,6 +117,5 @@ class OnChainProvider:
             token_symbol,
         )
         return []
-
 
 __all__ = ["OnChainProvider"]

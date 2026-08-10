@@ -35,7 +35,6 @@ __all__ = [
     "run_pipeline",
 ]
 
-
 async def run_pipeline(
     market_id: str,
     *,

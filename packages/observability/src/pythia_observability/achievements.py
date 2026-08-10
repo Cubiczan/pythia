@@ -44,7 +44,6 @@ from .types import Achievement, AchievementCondition
 # it gets stored on the Achievement for the UI to display ("You reached $127 P&L").
 # --------------------------------------------------------------------------- #
 
-
 def eval_trade_count(stats: dict[str, Any], cond: AchievementCondition) -> tuple[bool, Any]:
     """Total number of audit entries (executed + skipped).
 
@@ -54,12 +53,10 @@ def eval_trade_count(stats: dict[str, Any], cond: AchievementCondition) -> tuple
     actual = int(stats.get("total_trades", 0))
     return _compare_with_op(actual, cond.op, cond.value), actual
 
-
 def eval_win_count(stats: dict[str, Any], cond: AchievementCondition) -> tuple[bool, Any]:
     """Number of settled winning trades (realized_pnl > 0)."""
     actual = int(stats.get("winning_trades", 0))
     return _compare_with_op(actual, cond.op, cond.value), actual
-
 
 def eval_win_streak(stats: dict[str, Any], cond: AchievementCondition) -> tuple[bool, Any]:
     """Longest run of consecutive winning settled trades.
@@ -84,14 +81,12 @@ def eval_win_streak(stats: dict[str, Any], cond: AchievementCondition) -> tuple[
             current = 0
     return _compare_with_op(longest, cond.op, cond.value), longest
 
-
 def eval_realized_pnl_usd(
     stats: dict[str, Any], cond: AchievementCondition
 ) -> tuple[bool, Any]:
     """Total realized P&L in USD (cumulative across all settled trades)."""
     actual = float(stats.get("total_realized_pnl_usd", 0.0))
     return _compare_with_op(actual, cond.op, cond.value), actual
-
 
 def eval_brier_score(stats: dict[str, Any], cond: AchievementCondition) -> tuple[bool, Any]:
     """Best (lowest) per-analyst Brier score, gated by `min_trades`.
@@ -113,7 +108,6 @@ def eval_brier_score(stats: dict[str, Any], cond: AchievementCondition) -> tuple
     best_score = float(scores[best_analyst])
     return _compare_with_op(best_score, cond.op, cond.value), best_score
 
-
 def eval_drawdown_pct(stats: dict[str, Any], cond: AchievementCondition) -> tuple[bool, Any]:
     """Current drawdown from peak bankroll (percentage).
 
@@ -128,7 +122,6 @@ def eval_drawdown_pct(stats: dict[str, Any], cond: AchievementCondition) -> tupl
     # drawdown only.
     actual = float(stats.get("current_drawdown_pct", 0.0))
     return _compare_with_op(actual, cond.op, cond.value), actual
-
 
 def eval_wins_in_category(
     stats: dict[str, Any], cond: AchievementCondition
@@ -154,7 +147,6 @@ def eval_wins_in_category(
             count += 1
     return _compare_with_op(count, cond.op, cond.value), count
 
-
 # Dispatch table — string type -> evaluator function.
 EVALUATORS: dict[str, Callable[[dict[str, Any], AchievementCondition], tuple[bool, Any]]] = {
     "trade_count": eval_trade_count,
@@ -165,7 +157,6 @@ EVALUATORS: dict[str, Callable[[dict[str, Any], AchievementCondition], tuple[boo
     "drawdown_pct": eval_drawdown_pct,
     "wins_in_category": eval_wins_in_category,
 }
-
 
 def _compare_with_op(actual: float, op: str, threshold: Any) -> bool:
     """Apply comparison operator to two numeric values.
@@ -190,7 +181,6 @@ def _compare_with_op(actual: float, op: str, threshold: Any) -> bool:
     if op == "==":
         return actual == thr
     raise ValueError(f"Unsupported operator: {op!r}")
-
 
 class AchievementsEvaluator:
     """Load achievements.toml + evaluate every condition against the audit log.
@@ -288,7 +278,6 @@ class AchievementsEvaluator:
                 )
             )
         return out
-
 
 __all__ = [
     "EVALUATORS",

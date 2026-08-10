@@ -10,7 +10,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
 class Estimate(BaseModel):
     """Output of a single analyst.
 
@@ -21,7 +20,7 @@ class Estimate(BaseModel):
     probability:
         P(YES) in [0.0, 1.0]. The analyst's belief that the market resolves YES.
     confidence:
-        Analyst's own calibration score in [0.0, 1.0]. NOT a probability —
+        Analyst's own calibration score in [0.0, 1.0]. NOT a probability 
         it is the analyst's self-reported trust in its own estimate.
         Analysts are prompted to default to < 0.6 when uncertain.
     rationale:
@@ -65,7 +64,6 @@ class Estimate(BaseModel):
         except ValueError:
             return datetime.now(UTC).isoformat()
 
-
 class MarketContext(BaseModel):
     """Input to an analyst.
 
@@ -96,7 +94,6 @@ class MarketContext(BaseModel):
             raise ValueError(f"closes_at must be ISO 8601 or None, got: {v!r}") from exc
         return v
 
-
 class LLMConfig(BaseModel):
     """Configuration for a single LLM provider.
 
@@ -117,7 +114,6 @@ class LLMConfig(BaseModel):
     # Provider-specific overrides (optional).
     base_url: str | None = None  # for ollama / gensyn / openai-compatible proxies
     timeout_sec: float = Field(default=30.0, ge=1.0)
-
 
 # Type alias used in BaseAnalyst._build_prompt — a single chat message.
 ChatMessage = dict[str, str]

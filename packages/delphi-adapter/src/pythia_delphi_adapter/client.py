@@ -15,7 +15,7 @@ Pythia mesh needs into a single ``DelphiClient`` class. The client:
   pool is closed cleanly.
 
 Anywhere the live ATT response shape is uncertain, the code is annotated
-with ``# VERIFY:`` and a sensible default is assumed. This is a scaffold
+with ``# VERIFY:`` and a sensible default is assumed. This is a reference implementation
 — wire it up against the live ATT, run the smoke tests, fix the field
 names, then go live.
 """
@@ -62,7 +62,6 @@ DEFAULT_ENDPOINT = "https://api.delphi.gensyn.ai"
 _RETRY_STOP = stop_after_attempt(3)
 _RETRY_WAIT = wait_exponential(multiplier=1, min=1, max=8)
 
-
 class DelphiAPIError(Exception):
     """Raised when ATT returns a non-2xx HTTP response.
 
@@ -75,14 +74,11 @@ class DelphiAPIError(Exception):
         self.response = response
         self.status_code = response.status_code if response is not None else None
 
-
 class DelphiAuthError(DelphiAPIError):
     """Raised on 401/403 — API key missing or invalid."""
 
-
 class DelphiNotFoundError(DelphiAPIError):
     """Raised on 404 — market / order / position not found."""
-
 
 class DelphiClient:
     """Async client for the Gensyn Delphi ATT API.
@@ -488,11 +484,9 @@ class DelphiClient:
 
                 await asyncio.sleep(backoff)
 
-
 # Module-level lazy TypeAdapter for the MarketEvent discriminated union.
 # TypeAdapter construction is relatively expensive, so we cache it.
 _EVENT_ADAPTER = None
-
 
 def _get_event_adapter():
     """Return a cached ``TypeAdapter[MarketEvent]``."""
@@ -504,7 +498,6 @@ def _get_event_adapter():
 
         _EVENT_ADAPTER = TypeAdapter(MarketEvent)
     return _EVENT_ADAPTER
-
 
 __all__ = [
     "DelphiClient",

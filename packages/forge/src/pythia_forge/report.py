@@ -41,7 +41,6 @@ _GRID_COLOR = "#334155"     # slate-700 — grid lines
 _LOSS_MARKER = "#EF4444"    # red-500 — losing trades
 _WIN_MARKER = "#22C55E"     # green-500 — winning trades
 
-
 def generate_report(result: BacktestResult, output_path: Path) -> None:
     """Write a markdown backtest report + equity-curve PNG.
 
@@ -169,7 +168,6 @@ def generate_report(result: BacktestResult, output_path: Path) -> None:
     output_path.write_text("\n".join(lines), encoding="utf-8")
     logger.info("report written: %s (png: %s)", output_path, png_path)
 
-
 def plot_equity_curve(
     equity_curve: list[tuple[datetime, float]],
     output_path: Path,
@@ -259,11 +257,9 @@ def plot_equity_curve(
     fig.savefig(output_path, dpi=120, facecolor=_BG_COLOR, bbox_inches="tight")
     plt.close(fig)
 
-
 # ---------------------------------------------------------------------------
 # Recommendation engine — heuristic weight-tuning suggestions.
 # ---------------------------------------------------------------------------
-
 
 def _brier_label(score: float) -> str:
     """Human-readable calibration label for a Brier score."""
@@ -276,7 +272,6 @@ def _brier_label(score: float) -> str:
     if score <= 0.35:
         return "poor — consider down-weighting"
     return "very poor — strongly down-weight"
-
 
 def _build_recommendations(result: BacktestResult) -> list[str]:
     """Derive heuristic weight-tuning recommendations from the metrics.
@@ -347,6 +342,5 @@ def _build_recommendations(result: BacktestResult) -> list[str]:
         )
 
     return recs
-
 
 __all__ = ["generate_report", "plot_equity_curve"]

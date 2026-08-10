@@ -19,7 +19,6 @@ from pythia_risk.sizing import (
     size_trade_kelly,
 )
 
-
 # --- kelly_fraction -----------------------------------------------------------
 
 def test_kelly_basic() -> None:
@@ -32,12 +31,10 @@ def test_kelly_basic() -> None:
     assert quarter == pytest.approx(0.1, abs=1e-9)
     assert quarter > 0.0
 
-
 def test_kelly_no_edge() -> None:
     """p == m → full-Kelly = 0, fractional = 0."""
     assert _compute_kelly_fraction(0.5, 0.5, fraction=1.0) == 0.0
     assert kelly_fraction(0.5, 0.5, fraction=0.25) == 0.0
-
 
 def test_kelly_negative_edge() -> None:
     """p < m → full-Kelly negative, but clamped to 0 (no shorting)."""
@@ -45,7 +42,6 @@ def test_kelly_negative_edge() -> None:
     full = _compute_kelly_fraction(0.3, 0.5, fraction=1.0)
     assert full == 0.0
     assert kelly_fraction(0.3, 0.5, fraction=0.25) == 0.0
-
 
 def test_kelly_at_extremes() -> None:
     """Very high edge is clamped to fraction * 1.0 (no leverage)."""
@@ -59,7 +55,6 @@ def test_kelly_at_extremes() -> None:
     guarded = _compute_kelly_fraction(0.99, 1.0, fraction=0.25)
     assert guarded == 0.0
 
-
 def test_kelly_validates_inputs() -> None:
     """Out-of-range inputs raise ValueError."""
     with pytest.raises(ValueError):
@@ -70,7 +65,6 @@ def test_kelly_validates_inputs() -> None:
         kelly_fraction(0.5, 0.5, fraction=0.0)
     with pytest.raises(ValueError):
         kelly_fraction(0.5, 0.5, fraction=1.5)
-
 
 # --- size_trade_kelly ---------------------------------------------------------
 
@@ -86,7 +80,6 @@ def test_size_trade_kelly_basic() -> None:
     # 0.1 * 1000 = 100, but capped at max_stake_usd=50
     assert stake == 50.0
 
-
 def test_kelly_capped_at_max_stake() -> None:
     """Even with a huge bankroll, stake never exceeds max_stake_usd."""
     stake = size_trade_kelly(
@@ -97,7 +90,6 @@ def test_kelly_capped_at_max_stake() -> None:
         max_stake_usd=50.0,
     )
     assert stake == 50.0
-
 
 def test_quarter_kelly_reduces_stake() -> None:
     """Quarter-Kelly (0.25) gives exactly 1/4 of full-Kelly (1.0) stake."""
@@ -121,7 +113,6 @@ def test_quarter_kelly_reduces_stake() -> None:
     assert quarter == pytest.approx(100.0, abs=0.01)
     assert quarter == pytest.approx(full / 4.0, abs=0.01)
 
-
 def test_size_trade_kelly_no_edge_returns_zero() -> None:
     """No edge → 0 stake."""
     stake = size_trade_kelly(
@@ -132,7 +123,6 @@ def test_size_trade_kelly_no_edge_returns_zero() -> None:
         max_stake_usd=50.0,
     )
     assert stake == 0.0
-
 
 # --- size_trade_fixed ---------------------------------------------------------
 

@@ -39,12 +39,10 @@ from pythia_strata.providers import NewsProvider, OnChainProvider, SocialProvide
 
 logger = logging.getLogger("pythia_strata.cli")
 
-
 # ---------------------------------------------------------------------------
 # Delphi client resolution — lazy so the CLI is usable for `--help` even
 # when pythia_delphi_adapter isn't installed.
 # ---------------------------------------------------------------------------
-
 
 def _resolve_api_key(args: argparse.Namespace) -> str | None:
     """Resolve the Delphi API key from flags or env vars."""
@@ -52,7 +50,6 @@ def _resolve_api_key(args: argparse.Namespace) -> str | None:
     if key:
         return key
     return os.environ.get("DELPHI_API_KEY") or os.environ.get("DELPHI_KEY")
-
 
 def _make_delphi_client(api_key: str):  # type: ignore[no-untyped-def]
     """Instantiate a DelphiClient.
@@ -64,11 +61,9 @@ def _make_delphi_client(api_key: str):  # type: ignore[no-untyped-def]
 
     return DelphiClient(api_key=api_key)
 
-
 # ---------------------------------------------------------------------------
 # enrich subcommand
 # ---------------------------------------------------------------------------
-
 
 async def _cmd_enrich_async(args: argparse.Namespace) -> int:
     api_key = _resolve_api_key(args)
@@ -111,15 +106,12 @@ async def _cmd_enrich_async(args: argparse.Namespace) -> int:
     print(out)
     return 0
 
-
 def _cmd_enrich(args: argparse.Namespace) -> int:
     return asyncio.run(_cmd_enrich_async(args))
-
 
 # ---------------------------------------------------------------------------
 # watch subcommand
 # ---------------------------------------------------------------------------
-
 
 async def _cmd_watch_async(args: argparse.Namespace) -> int:
     api_key = _resolve_api_key(args)
@@ -182,7 +174,6 @@ async def _cmd_watch_async(args: argparse.Namespace) -> int:
                 return 0
             await asyncio.sleep(args.interval)
 
-
 def _cmd_watch(args: argparse.Namespace) -> int:
     try:
         return asyncio.run(_cmd_watch_async(args))
@@ -190,11 +181,9 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         print("\nwatch interrupted; exiting.", file=sys.stderr)
         return 130  # 128 + SIGINT
 
-
 # ---------------------------------------------------------------------------
 # Argparse wiring
 # ---------------------------------------------------------------------------
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -261,13 +250,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     return parser
 
-
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
     # Configure logging: -v → WARNING, -vv → INFO, default → WARNING.
-    # (We accept -v / -vv as global flags by re-parsing if necessary —
+    # (We accept -v / -vv as global flags by re-parsing if necessary 
     # simpler to just check env var.)
     log_level = os.environ.get("PYTHIA_STRATA_LOG", "WARNING").upper()
     logging.basicConfig(
@@ -276,7 +264,6 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     return int(args.func(args))
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

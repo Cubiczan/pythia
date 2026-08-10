@@ -80,11 +80,9 @@ _TRADING_DAYS_PER_YEAR = 252
 # Guard against division-by-zero in the settle math (price clamped to [eps, 1-eps]).
 _PRICE_EPS = 0.01
 
-
 # ---------------------------------------------------------------------------
 # Internal trade record — accumulates everything needed for aggregation.
 # ---------------------------------------------------------------------------
-
 
 @dataclass
 class _TradeRecord:
@@ -105,11 +103,9 @@ class _TradeRecord:
     # Only includes analysts that actually returned an estimate.
     estimates: dict[str, float] = field(default_factory=dict)
 
-
 # ---------------------------------------------------------------------------
 # Backtester
 # ---------------------------------------------------------------------------
-
 
 class Backtester:
     """Replay resolved Delphi markets through the full Pythia pipeline.
@@ -798,11 +794,9 @@ class Backtester:
                     max_dd = dd
         return float(max_dd)
 
-
 # ---------------------------------------------------------------------------
 # Convenience function — one-call backtest.
 # ---------------------------------------------------------------------------
-
 
 async def run_backtest(config: BacktestConfig) -> BacktestResult:
     """Run a backtest in one call.
@@ -815,6 +809,5 @@ async def run_backtest(config: BacktestConfig) -> BacktestResult:
     ``Backtester`` class for the common case.
     """
     return await Backtester(config).run()
-
 
 __all__ = ["Backtester", "run_backtest"]

@@ -18,7 +18,7 @@ It answers three questions, in order:
 
 If all gates pass, `RiskEngine.evaluate(...)` returns a `TradePlan(decision="APPROVE", ...)` with a dollar size and side (`YES` or `NO`). Otherwise it returns `TradePlan(decision="REJECT", ...)` with a `risk_flags` entry explaining why.
 
-The upstream `meshcfo` package provides the capital-management primitives (ledger, position tracking, audit hooks). This wrapper adds the **Delphi-specific** layer: binary-market Kelly math, market-type tagging, and a config schema tuned for the 2-week P&L contest where *staying solvent is alpha*.
+The upstream `meshcfo` package provides the capital-management primitives (ledger, position tracking, audit hooks). This wrapper adds the **Delphi-specific** layer: binary-market Kelly math, market-type tagging, and a config schema tuned for the short-horizon P&L regime where *staying solvent is alpha*.
 
 ---
 
@@ -26,7 +26,7 @@ The upstream `meshcfo` package provides the capital-management primitives (ledge
 
 This is a **thin wrapper** repo. The upstream `meshcfo` code stays the source of truth and is consumed in one of two ways (see [`SUBMODULES.md`](../SUBMODULES.md) in the top-level pythia repo):
 
-1. **Vendored (hackathon default):** copy the upstream code into `vendor/meshcfo/` and pin the commit SHA in [`VENDOR_COMMIT.txt`](./VENDOR_COMMIT.txt).
+1. **Vendored (default):** copy the upstream code into `vendor/meshcfo/` and pin the commit SHA in [`VENDOR_COMMIT.txt`](./VENDOR_COMMIT.txt).
 2. **Nested submodule:** `git submodule add git@github.com:icohangar-ops/meshcfo.git vendor/meshcfo`.
 
 Anything that depends on a specific `meshcfo` internal API is marked with a `# VERIFY:` comment. Those calls need to be re-checked against the pinned upstream commit before going live.

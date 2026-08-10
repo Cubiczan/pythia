@@ -21,16 +21,13 @@ from pythia_observability.types import AuditEntry, PnLMilestone
 FIXTURES = Path(__file__).parent / "fixtures"
 SAMPLE_LOG = FIXTURES / "sample_audit.jsonl"
 
-
 # --------------------------------------------------------------------------- #
 # Fixture: a temp JSONL file built from a list of dicts.
 # --------------------------------------------------------------------------- #
 
-
 @pytest.fixture
 def sample_reader() -> AuditLogReader:
     return AuditLogReader(SAMPLE_LOG)
-
 
 @pytest.fixture
 def tmp_audit_log(tmp_path: Path) -> Path:
@@ -70,11 +67,9 @@ def tmp_audit_log(tmp_path: Path) -> Path:
             fh.write(json.dumps(e) + "\n")
     return p
 
-
 # --------------------------------------------------------------------------- #
 # iter_entries / read_all.
 # --------------------------------------------------------------------------- #
-
 
 class TestIterEntries:
     def test_iter_returns_audit_entry_instances(self, sample_reader: AuditLogReader) -> None:
@@ -86,7 +81,7 @@ class TestIterEntries:
         gen = sample_reader.iter_entries()
         first = next(gen)
         assert isinstance(first, AuditEntry)
-        assert first.market_id == "dphi_01J7Q-competition-winner"
+        assert first.market_id == "dphi_01J7Q-sample-winner"
 
     def test_iter_skips_blank_lines(self, tmp_path: Path) -> None:
         p = tmp_path / "with_blanks.jsonl"
@@ -115,7 +110,6 @@ class TestIterEntries:
         entries = list(reader.iter_entries())
         assert len(entries) == 2  # malformed middle line skipped
 
-
 class TestReadAll:
     def test_read_all_returns_list(self, sample_reader: AuditLogReader) -> None:
         entries = sample_reader.read_all()
@@ -138,17 +132,15 @@ class TestReadAll:
         with pytest.raises(FileNotFoundError):
             AuditLogReader(tmp_path / "does_not_exist.jsonl")
 
-
 # --------------------------------------------------------------------------- #
 # Slicing.
 # --------------------------------------------------------------------------- #
 
-
 class TestSlicing:
     def test_get_by_market_returns_only_matching(self, sample_reader: AuditLogReader) -> None:
-        entries = sample_reader.get_by_market("dphi_01J7Q-competition-winner")
+        entries = sample_reader.get_by_market("dphi_01J7Q-sample-winner")
         assert len(entries) == 1
-        assert entries[0].market_id == "dphi_01J7Q-competition-winner"
+        assert entries[0].market_id == "dphi_01J7Q-sample-winner"
 
     def test_get_by_market_unknown_returns_empty(self, sample_reader: AuditLogReader) -> None:
         assert sample_reader.get_by_market("does_not_exist") == []
@@ -179,11 +171,9 @@ class TestSlicing:
         end = datetime(2025, 1, 31, tzinfo=UTC)
         assert sample_reader.filter_by_time(start, end) == []
 
-
 # --------------------------------------------------------------------------- #
 # compute_pnl_series.
 # --------------------------------------------------------------------------- #
-
 
 class TestPnLSeries:
     def test_pnl_series_returns_milestones(self, sample_reader: AuditLogReader) -> None:
@@ -236,11 +226,9 @@ class TestPnLSeries:
         p.write_text("", encoding="utf-8")
         assert AuditLogReader(p).compute_pnl_series() == []
 
-
 # --------------------------------------------------------------------------- #
 # compute_brier_scores.
 # --------------------------------------------------------------------------- #
-
 
 class TestBrierScores:
     def test_brier_returns_dict(self, sample_reader: AuditLogReader) -> None:
@@ -306,11 +294,9 @@ class TestBrierScores:
         )
         assert AuditLogReader(p).compute_brier_scores() == {}
 
-
 # --------------------------------------------------------------------------- #
 # compute_stats.
 # --------------------------------------------------------------------------- #
-
 
 class TestComputeStats:
     def test_stats_returns_well_formed_dict(self, sample_reader: AuditLogReader) -> None:
@@ -389,11 +375,9 @@ class TestComputeStats:
         # First entry's bankroll_before is 1000.0.
         assert stats["current_bankroll_usd"] == pytest.approx(1000.0 + 33.33, abs=0.01)
 
-
 # --------------------------------------------------------------------------- #
 # AuditEntry convenience properties.
 # --------------------------------------------------------------------------- #
-
 
 class TestAuditEntryProperties:
     def test_is_executed(self, sample_reader: AuditLogReader) -> None:

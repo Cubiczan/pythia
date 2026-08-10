@@ -28,7 +28,6 @@ from pythia_risk.types import (
     TradeReceipt,
 )
 
-
 # --- Fixtures -----------------------------------------------------------------
 
 def _default_config() -> RiskConfig:
@@ -48,7 +47,6 @@ def _default_config() -> RiskConfig:
         },
     )
 
-
 def _default_bankroll(current: float = 1000.0) -> BankrollState:
     return BankrollState(
         cash_usd=current,
@@ -58,7 +56,6 @@ def _default_bankroll(current: float = 1000.0) -> BankrollState:
         drawdown_pct=0.0,
         last_loss_at=None,
     )
-
 
 def _decision(prob: float = 0.72, market_id: str = "mkt-1") -> ConsensusDecision:
     return ConsensusDecision(
@@ -71,7 +68,6 @@ def _decision(prob: float = 0.72, market_id: str = "mkt-1") -> ConsensusDecision
         timestamp="2026-08-10T12:00:00Z",
     )
 
-
 def _market(yes_price: float = 0.55, category: str = "politics", market_id: str = "mkt-1") -> Market:
     return Market(
         market_id=market_id,
@@ -79,7 +75,6 @@ def _market(yes_price: float = 0.55, category: str = "politics", market_id: str 
         category=category,
         question="Will the Fed cut rates in September?",
     )
-
 
 # --- Happy path ---------------------------------------------------------------
 
@@ -98,7 +93,6 @@ def test_approve_when_consensus_exceeds_price() -> None:
     assert plan.risk_flags == []
     assert "APPROVE" in plan.rationale or plan.decision == "APPROVE"
 
-
 def test_approve_flips_to_no_when_consensus_below_price() -> None:
     """consensus_prob < yes_price (beyond tolerance) → APPROVE, side=NO."""
     engine = RiskEngine(_default_config())
@@ -110,7 +104,6 @@ def test_approve_flips_to_no_when_consensus_below_price() -> None:
     assert plan.decision == "APPROVE"
     assert plan.side == "NO"
     assert plan.size_usd > 0.0
-
 
 # --- Gate: no_edge ------------------------------------------------------------
 
@@ -126,7 +119,6 @@ def test_reject_no_edge_when_consensus_equals_price() -> None:
     assert plan.size_usd == 0.0
     assert "no_edge" in plan.risk_flags
 
-
 def test_reject_no_edge_within_tolerance() -> None:
     """1pp difference is still within the 2pp tolerance → no_edge."""
     engine = RiskEngine(_default_config())
@@ -137,7 +129,6 @@ def test_reject_no_edge_within_tolerance() -> None:
     )
     assert plan.decision == "REJECT"
     assert "no_edge" in plan.risk_flags
-
 
 # --- Gate: drawdown_breaker ---------------------------------------------------
 
@@ -156,7 +147,6 @@ def test_reject_drawdown_breaker() -> None:
     assert "drawdown_breaker" in plan.risk_flags
     assert plan.size_usd == 0.0
 
-
 # --- Gate: cool_down_active ---------------------------------------------------
 
 def test_reject_cool_down() -> None:
@@ -173,7 +163,6 @@ def test_reject_cool_down() -> None:
     assert plan.decision == "REJECT"
     assert "cool_down_active" in plan.risk_flags
 
-
 def test_cool_down_clears_after_threshold() -> None:
     """After cool_down_min_after_loss has elapsed, trading is allowed again."""
     engine = RiskEngine(_default_config())
@@ -186,7 +175,6 @@ def test_cool_down_clears_after_threshold() -> None:
     )
     assert plan.decision == "APPROVE"
     assert "cool_down_active" not in plan.risk_flags
-
 
 # --- Gate: market_type_not_allowed --------------------------------------------
 
@@ -201,7 +189,6 @@ def test_reject_market_type_not_allowed() -> None:
     assert plan.decision == "REJECT"
     assert "market_type_not_allowed" in plan.risk_flags
 
-
 def test_reject_unknown_category() -> None:
     """category not in market_type_rules → REJECT (treated as not allowed)."""
     engine = RiskEngine(_default_config())
@@ -212,7 +199,6 @@ def test_reject_unknown_category() -> None:
     )
     assert plan.decision == "REJECT"
     assert "market_type_not_allowed" in plan.risk_flags
-
 
 # --- Gate: exposure_cap -------------------------------------------------------
 
@@ -235,7 +221,6 @@ def test_exposure_cap_reduces_size() -> None:
     assert "exposure_cap" in plan.risk_flags
     assert plan.size_usd == pytest.approx(10.0, abs=0.01)
 
-
 def test_exposure_cap_rejects_when_exhausted() -> None:
     """When headroom == 0, REJECT with flag=exposure_cap."""
     engine = RiskEngine(_default_config())
@@ -249,7 +234,6 @@ def test_exposure_cap_rejects_when_exhausted() -> None:
     assert plan.decision == "REJECT"
     assert "exposure_cap" in plan.risk_flags
     assert plan.size_usd == 0.0
-
 
 # --- Per-market cap (silent reduce) -------------------------------------------
 
@@ -267,7 +251,6 @@ def test_per_market_cap_reduces_size() -> None:
     assert plan.decision == "APPROVE"
     assert plan.size_usd <= 20.0  # sports category cap
 
-
 # --- State mutations ----------------------------------------------------------
 
 def test_record_loss_arms_cool_down() -> None:
@@ -280,7 +263,6 @@ def test_record_loss_arms_cool_down() -> None:
     # current_bankroll drops by 50
     assert engine.state.current_bankroll_usd == pytest.approx(950.0, abs=0.01)
 
-
 def test_record_win_updates_peak() -> None:
     """record_win moves peak_bankroll_usd if current exceeds it."""
     engine = RiskEngine(_default_config())
@@ -289,7 +271,6 @@ def test_record_win_updates_peak() -> None:
     assert engine.state.current_bankroll_usd == pytest.approx(1200.0, abs=0.01)
     assert engine.state.peak_bankroll_usd == pytest.approx(1200.0, abs=0.01)
     assert engine.state.drawdown_pct == 0.0
-
 
 def test_update_state_moves_cash_to_positions() -> None:
     """update_state moves size from cash to open_positions."""
@@ -310,7 +291,6 @@ def test_update_state_moves_cash_to_positions() -> None:
     assert engine.state.open_positions_usd == pytest.approx(100.0, abs=0.01)
     assert engine.state.current_bankroll_usd == pytest.approx(1000.0, abs=0.01)
 
-
 def test_drawdown_recompute_after_loss() -> None:
     """After a loss, drawdown_pct = (peak - current) / peak * 100."""
     engine = RiskEngine(_default_config())
@@ -325,7 +305,6 @@ def test_drawdown_recompute_after_loss() -> None:
     engine.record_loss(market_id="mkt-X", loss_usd=100.0)
     # (1000 - 900) / 1000 * 100 = 10
     assert engine.state.drawdown_pct == pytest.approx(10.0, abs=0.01)
-
 
 # --- Engine.evaluate is pure w.r.t. bankroll parameter ------------------------
 

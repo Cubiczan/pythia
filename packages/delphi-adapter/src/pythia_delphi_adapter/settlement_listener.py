@@ -36,7 +36,6 @@ logger = logging.getLogger(__name__)
 
 OnSettlement = Callable[[Settlement], Awaitable[None]]
 
-
 class SettlementListener:
     """Long-running async loop that polls ATT for new settlements.
 
@@ -72,7 +71,7 @@ class SettlementListener:
         """Run the polling loop until ``stop()`` is called.
 
         Each new settlement found is passed to ``on_settlement``. Exceptions
-        raised by ``on_settlement`` are logged but do not stop the loop —
+        raised by ``on_settlement`` are logged but do not stop the loop 
         a flaky downstream consumer should not break settlement delivery.
 
         ATT errors (transport, 5xx) trigger exponential backoff up to
@@ -143,6 +142,5 @@ class SettlementListener:
         if to is not None and to.tzinfo is None:
             to = to.replace(tzinfo=timezone.utc)
         self._last_seen = to
-
 
 __all__ = ["SettlementListener", "OnSettlement"]

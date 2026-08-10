@@ -25,7 +25,6 @@ from .engine import ConsensusEngine
 from .fusion import fuse
 from .types import ConsensusConfig, ConsensusDecision, Estimate
 
-
 def _load_json(path: Path) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -35,7 +34,6 @@ def _load_json(path: Path) -> Any:
     except json.JSONDecodeError as exc:
         print(f"error: invalid JSON in {path}: {exc}", file=sys.stderr)
         raise SystemExit(2)
-
 
 def _cmd_fuse(args: argparse.Namespace) -> int:
     raw = _load_json(Path(args.estimates))
@@ -76,7 +74,6 @@ def _cmd_fuse(args: argparse.Namespace) -> int:
     print(out)
     return 0
 
-
 def _cmd_explain(args: argparse.Namespace) -> int:
     raw = _load_json(Path(args.decision))
     try:
@@ -87,7 +84,6 @@ def _cmd_explain(args: argparse.Namespace) -> int:
     engine = ConsensusEngine(ConsensusConfig(method=decision.method))
     print(engine.explain(decision))
     return 0
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -142,12 +138,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     return parser
 
-
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     return int(args.func(args))
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

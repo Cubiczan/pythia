@@ -15,7 +15,6 @@ from .types import LLMConfig
 
 logger = logging.getLogger(__name__)
 
-
 class AnalystRegistry:
     """Singleton-ish registry of analyst classes.
 

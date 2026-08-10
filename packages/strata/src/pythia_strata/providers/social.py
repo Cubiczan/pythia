@@ -34,7 +34,6 @@ from pythia_strata.types import SocialSignal
 
 logger = logging.getLogger(__name__)
 
-
 class SocialProvider:
     """Fetches social-platform signal aggregates for a query.
 
@@ -138,6 +137,5 @@ class SocialProvider:
             query[:80],
         )
         return []
-
 
 __all__ = ["SocialProvider"]

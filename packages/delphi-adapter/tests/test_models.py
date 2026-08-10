@@ -28,11 +28,9 @@ from pythia_delphi_adapter.models import (
     TradeReceipt,
 )
 
-
 # ---------------------------------------------------------------------------
 # Market
 # ---------------------------------------------------------------------------
-
 
 def _market_dict(**overrides) -> dict:
     base = {
@@ -52,7 +50,6 @@ def _market_dict(**overrides) -> dict:
     base.update(overrides)
     return base
 
-
 def test_market_parses_basic_payload() -> None:
     m = Market.model_validate(_market_dict())
     assert m.market_id == "dphi_01J"
@@ -61,11 +58,9 @@ def test_market_parses_basic_payload() -> None:
     assert m.yes_price == pytest.approx(0.62)
     assert m.created_at.tzinfo is not None
 
-
 def test_market_rejects_price_out_of_range() -> None:
     with pytest.raises(ValidationError):
         Market.model_validate(_market_dict(yes_price=1.5))
-
 
 def test_market_coerces_naive_datetime_to_utc() -> None:
     """Naive datetimes (no Z) should be treated as UTC, not rejected."""
@@ -73,26 +68,21 @@ def test_market_coerces_naive_datetime_to_utc() -> None:
     assert m.created_at.tzinfo is not None
     assert m.created_at.utcoffset() == datetime.now(timezone.utc).utcoffset()
 
-
 def test_market_accepts_extra_fields() -> None:
     """ATT may add fields; we tolerate them (model_config extra='allow')."""
     m = Market.model_validate({**_market_dict(), "extra_unknown_field": 123})
     assert m.market_id == "dphi_01J"
 
-
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
-
 
 def test_market_status_enum_roundtrip() -> None:
     assert MarketStatus("OPEN") == MarketStatus.OPEN
     assert MarketStatus.OPEN.value == "OPEN"
 
-
 def test_order_side_enum_values() -> None:
     assert {s.value for s in OrderSide} == {"YES", "NO"}
-
 
 def test_market_category_includes_subjective() -> None:
     """Delphi's subjective/niche category must be supported."""
@@ -101,27 +91,22 @@ def test_market_category_includes_subjective() -> None:
     assert "POLITICS" in cats
     assert "CRYPTO" in cats
 
-
 # ---------------------------------------------------------------------------
 # OrderBook
 # ---------------------------------------------------------------------------
-
 
 def test_orderbook_defaults_to_empty_levels() -> None:
     book = OrderBook.model_validate({"market_id": "dphi_01J"})
     assert book.bids == []
     assert book.asks == []
 
-
 def test_orderbook_level_validates_price_range() -> None:
     with pytest.raises(ValidationError):
         OrderBookLevel(price=2.0, size_usd=10.0)
 
-
 # ---------------------------------------------------------------------------
 # TradeReceipt
 # ---------------------------------------------------------------------------
-
 
 def test_trade_receipt_defaults_status_to_pending() -> None:
     r = TradeReceipt.model_validate(
@@ -136,7 +121,6 @@ def test_trade_receipt_defaults_status_to_pending() -> None:
     assert r.status == OrderStatus.PENDING
     assert r.fill_price is None
     assert r.signed_by is None
-
 
 def test_trade_receipt_parses_full_payload() -> None:
     r = TradeReceipt.model_validate(
@@ -155,11 +139,9 @@ def test_trade_receipt_parses_full_payload() -> None:
     assert r.status == OrderStatus.FILLED
     assert r.signed_by == "key_0xABCD"
 
-
 # ---------------------------------------------------------------------------
 # Position
 # ---------------------------------------------------------------------------
-
 
 def test_position_validates() -> None:
     p = Position.model_validate(
@@ -174,11 +156,9 @@ def test_position_validates() -> None:
     )
     assert p.unrealized_pnl_usd == pytest.approx(3.0)
 
-
 # ---------------------------------------------------------------------------
 # Settlement
 # ---------------------------------------------------------------------------
-
 
 def test_settlement_parses_evidence_hashes() -> None:
     s = Settlement.model_validate(
@@ -195,7 +175,6 @@ def test_settlement_parses_evidence_hashes() -> None:
     assert s.evidence_hashes == ["bafy1", "bafy2"]
     assert s.resolved_at.tzinfo is not None
 
-
 def test_settlement_rejects_out_of_range_price() -> None:
     with pytest.raises(ValidationError):
         Settlement.model_validate(
@@ -208,11 +187,9 @@ def test_settlement_rejects_out_of_range_price() -> None:
             }
         )
 
-
 # ---------------------------------------------------------------------------
 # Market events (discriminated union)
 # ---------------------------------------------------------------------------
-
 
 def test_market_event_discriminated_union_dispatch() -> None:
     """Each event variant should parse via the `type` discriminator."""
@@ -258,7 +235,6 @@ def test_market_event_discriminated_union_dispatch() -> None:
     )
     assert isinstance(settled, MarketSettled)
     assert settled.outcome == SettlementOutcome.YES
-
 
 def test_market_event_unknown_type_raises() -> None:
     from pydantic import TypeAdapter

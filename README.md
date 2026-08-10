@@ -4,7 +4,7 @@
 
 > *Pythia was the oracle at Delphi. In this system, no single model issues a prophecy — a mesh of specialized analyst agents must reach consensus before a trade is placed, and every step is human-auditable.*
 
-**Competition:** [Delphi: Agent Arena Competition](https://dorahacks.io/hackathon/delphi-agent-competition) (Gensyn × DoraHacks) — Build an agent, point it at real Delphi information markets, let it trade for two weeks. Top 3 P&Ls share $10,000.
+**Protocol:** [Gensyn Delphi](https://docs.gensyn.ai/tech/agentic-trading) — on-chain information markets that generalize prediction markets to subjective and niche scenarios, with AI-as-arbiter settlement.
 
 **Org:** [icohangar-ops / Impactquadrant](https://github.com/icohangar-ops) — *"Developer and enterprise infrastructure for building hardened, human-auditable multi-agent decision workflows."*
 
@@ -12,13 +12,13 @@
 
 ## Why Pythia
 
-Most competitors will ship a single-LLM-with-a-prompt bot and YOLO trades. That's a losing strategy on Delphi specifically, because **Delphi prices nuance and subjective scenarios** — domains where ensemble reasoning + calibrated uncertainty beat raw news-speed. The `icohangar-ops` stack already solves the *hard* part: hardened, auditable, consensus-driven multi-agent decision workflows. Pythia is that stack with a thin Delphi adapter on top.
+A single LLM prompted to trade prediction markets is structurally fragile: it over-weights recency, hallucinates market context, has no calibrated uncertainty, and cannot self-correct before placing a trade. Delphi specifically prices nuance and subjective scenarios — domains where ensemble reasoning and calibrated uncertainty beat raw news-speed. The `icohangar-ops` stack already solves the *hard* part: hardened, auditable, consensus-driven multi-agent decision workflows. Pythia is that stack with a thin Delphi adapter on top.
 
 **The wedge:**
 1. **Calibrated ensembles beat single-model punters** on subjective/niche markets — Delphi's differentiator vs. Polymarket.
 2. **Agreement-gated trades** — only place a bet when the analyst mesh agrees beyond a threshold. Avoids the LLM-hallucination-blowup failure mode.
-3. **Risk gates (`meshcfo`)** prevent ruin during the 2-week window — staying solvent *is* alpha in a P&L contest.
-4. **Replayable audit trail** — judges can scrub through any trade and see the consensus path.
+3. **Risk gates (`meshcfo`)** prevent ruin — staying solvent *is* alpha when the time horizon is short and the bankroll is finite.
+4. **Replayable audit trail** — every decision is signed and replayable end-to-end, from analyst estimate to trade receipt.
 5. **Market-creation side strategy** — Delphi is permissionless; analysts can mint high-edge subjective markets the mesh is uniquely positioned to price.
 
 ---
@@ -178,18 +178,17 @@ achievements_enabled = true
 
 ---
 
-## 2-week shipping plan
+## Roadmap
 
-We are at day ~11 of the 24-day trading window (Jul 31 → Aug 23, 2026). Plan below assumes ~13 days remaining.
+Pythia is shipped as an opinionated reference mesh plus thin integration wrappers around the upstream `icohangar-ops` repos. The suggested path from clean clone to live trading is roughly two engineering weeks for a solo operator familiar with the Delphi SDK.
 
-| Days | Milestone |
+| Phase | Milestone |
 |---|---|
-| 1–2 | Wire `packages/delphi-adapter` to ATT + `gensyn-delphi-skills`. Single market read + paper trade. |
-| 3–4 | Stand up 3-analyst mesh (politics + crypto + niche) on `packages/strata` → `packages/consensus`. |
-| 5–6 | Plug `packages/risk` (Kelly-capped sizing) + `packages/executor`. Go live with small size. |
-| 7–10 | Iterate: tune agreement threshold, add sports analyst, run `packages/forge` backtests on resolved markets. |
-| 11–12 | Polish `packages/observability` replay UI + `achievements` P&L milestones for the demo. |
-| 13 | Record demo video, write README, submit. |
+| 1 | Wire `packages/delphi-adapter` to `@gensyn-ai/gensyn-delphi-sdk`. Single market read + paper trade. |
+| 2 | Stand up 3-analyst mesh (politics + crypto + niche) on `packages/strata` → `packages/consensus`. |
+| 3 | Plug `packages/risk` (Kelly-capped sizing) + `packages/executor`. Go live with small size. |
+| 4 | Iterate: tune agreement threshold, add sports analyst, run `packages/forge` backtests on resolved markets. |
+| 5 | Polish `packages/observability` replay UI + `achievements` P&L milestones. |
 
 ---
 
@@ -203,14 +202,14 @@ MIT for the new code (`packages/delphi-adapter`, `packages/analyst-mesh`). Wrapp
 
 | Component | Status |
 |---|---|
-| `packages/delphi-adapter` | Scaffold + ATT client stub |
-| `packages/analyst-mesh` | Scaffold + 4 analyst stubs |
-| `packages/consensus` | Wrapper scaffold |
-| `packages/risk` | Wrapper scaffold |
-| `packages/executor` | Wrapper scaffold + CLI |
-| `packages/observability` | Wrapper scaffold |
-| `packages/forge` | Wrapper scaffold + backtest CLI |
-| `packages/strata` | Wrapper scaffold |
+| `packages/delphi-adapter` | SDK bridge client + market models + settlement listener |
+| `packages/analyst-mesh` | 4 specialist analysts + registry + concurrent runner |
+| `packages/consensus` | Logit-mean fusion + agreement gate + audit signer |
+| `packages/risk` | Multi-outcome Kelly sizing + drawdown breaker + market-type rules |
+| `packages/executor` | Full pipeline CLI (paper / live) + signing |
+| `packages/observability` | Audit log reader + FastAPI replay UI + achievements |
+| `packages/forge` | Backtester + report generator + tune CLI |
+| `packages/strata` | News + on-chain + social enrichment providers |
 | Design doc PDF | [`docs/pythia-design.pdf`](./docs/pythia-design.pdf) |
 
-This is a hackathon scaffold, not production code. Wire the upstream `icohangar-ops` repos as submodules under `packages/*/vendor/` before going live.
+The upstream `icohangar-ops` repos (consensus-hardening-protocol, meshcfo, metabocommand, agent-observability, achievements, forge, strata) remain the source of truth for the wrapped concerns. Wire them under `packages/*/vendor/` (vendored + pinned) or as git submodules before going live with real capital.

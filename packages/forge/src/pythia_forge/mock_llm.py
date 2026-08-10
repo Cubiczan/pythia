@@ -75,7 +75,6 @@ SPECIALTY_NUDGES: dict[str, float] = {
 _DEFAULT_PROBABILITY: float = 0.50
 _CONFIDENCE: float = 0.60  # fixed moderate confidence — exercises the agreement gate
 
-
 class MockLLM:
     """Deterministic, keyword-based LLM replacement for backtests.
 
@@ -209,6 +208,5 @@ class MockLLM:
                     return m.group(1).strip()
                 return content
         return ""
-
 
 __all__ = ["MockLLM", "SPECIALTY_NUDGES"]

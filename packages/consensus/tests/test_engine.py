@@ -11,7 +11,6 @@ from pythia_consensus import ConsensusConfig, ConsensusEngine
 from pythia_consensus.audit import AuditSigner
 from pythia_consensus.types import Estimate
 
-
 def _est(probabilities: list[float], *, market_id: str = "mkt-1") -> list[Estimate]:
     ts = datetime.now(timezone.utc).isoformat()
     return [
@@ -26,7 +25,6 @@ def _est(probabilities: list[float], *, market_id: str = "mkt-1") -> list[Estima
         )
         for i, p in enumerate(probabilities)
     ]
-
 
 class TestConsensusEngineDecide:
     def test_decide_matches_fuse_with_equal_weights(self) -> None:
@@ -65,7 +63,6 @@ class TestConsensusEngineDecide:
         # Mutating the original cfg should not affect the engine.
         cfg.method = "logit-mean"
         assert engine.config.method == "median"
-
 
 class TestConsensusEngineUpdateWeights:
     def test_update_weights_lower_brier_gets_higher_weight(self) -> None:
@@ -138,7 +135,6 @@ class TestConsensusEngineUpdateWeights:
         # Higher alpha → exponentially bigger ratio.
         assert high_ratio > low_ratio
 
-
 class TestConsensusEngineExplain:
     def test_explain_contains_gate_and_method(self) -> None:
         ests = _est([0.6, 0.62])
@@ -179,7 +175,6 @@ class TestConsensusEngineExplain:
         explanation = engine.explain(d)
         for aid in ("a0", "a1", "a2"):
             assert aid in explanation
-
 
 class TestAuditSigner:
     def test_stub_signer_when_upstream_absent(self) -> None:

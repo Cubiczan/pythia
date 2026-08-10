@@ -14,7 +14,6 @@ import pytest
 
 from pythia_executor import cli
 
-
 def test_help_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
     """``pythia --help`` exits 0 and mentions the executor subcommand."""
     with pytest.raises(SystemExit) as exc_info:
@@ -22,7 +21,6 @@ def test_help_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
     assert exc_info.value.code == 0
     captured = capsys.readouterr()
     assert "executor" in captured.out
-
 
 def test_executor_help_shows_delphi(capsys: pytest.CaptureFixture[str]) -> None:
     """``pythia executor --help`` mentions the delphi subcommand."""
@@ -32,14 +30,12 @@ def test_executor_help_shows_delphi(capsys: pytest.CaptureFixture[str]) -> None:
     captured = capsys.readouterr()
     assert "delphi" in captured.out
 
-
 def test_no_args_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
     """``pythia`` with no args prints help and returns 0."""
     rc = cli.main([])
     assert rc == 0
     captured = capsys.readouterr()
     assert "executor" in captured.out
-
 
 def test_paper_trade_help(capsys: pytest.CaptureFixture[str]) -> None:
     """``pythia executor delphi paper-trade --help`` shows the flags."""
@@ -53,7 +49,6 @@ def test_paper_trade_help(capsys: pytest.CaptureFixture[str]) -> None:
     assert "--max-stake-usd" in captured.out
     assert "--audit-log" in captured.out
 
-
 def test_run_help(capsys: pytest.CaptureFixture[str]) -> None:
     """``pythia executor delphi run --help`` shows the flags."""
     with pytest.raises(SystemExit) as exc_info:
@@ -65,7 +60,6 @@ def test_run_help(capsys: pytest.CaptureFixture[str]) -> None:
     assert "--log-level" in captured.out
     assert "--once" in captured.out
 
-
 def test_replay_help(capsys: pytest.CaptureFixture[str]) -> None:
     """``pythia executor delphi replay --help`` shows the flags."""
     with pytest.raises(SystemExit) as exc_info:
@@ -75,14 +69,12 @@ def test_replay_help(capsys: pytest.CaptureFixture[str]) -> None:
     assert "audit_log_path" in captured.out
     assert "--line" in captured.out
 
-
 def test_replay_missing_file(capsys: pytest.CaptureFixture[str]) -> None:
     """``replay`` on a non-existent path returns 1 with a clear message."""
     rc = cli.main(["executor", "delphi", "replay", "/tmp/does-not-exist.jsonl"])
     assert rc == 1
     captured = capsys.readouterr()
     assert "not found" in captured.err
-
 
 def test_replay_prints_decision_chain(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -158,7 +150,6 @@ def test_replay_prints_decision_chain(
     assert "TradeReceipt" in out
     assert "PAPER" in out
 
-
 def test_replay_line_out_of_range(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -169,7 +160,6 @@ def test_replay_line_out_of_range(
     assert rc == 1
     captured = capsys.readouterr()
     assert "out of range" in captured.err
-
 
 def test_replay_empty_file(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]

@@ -1,7 +1,7 @@
 # pythia-observability
 
 > Replay UI + achievements layer for the Pythia multi-agent trading mesh.
-> Wraps [`icohangar-ops/agent-observability`](https://github.com/icohangar-ops/agent-observability) (signed audit trail) and [`icohangar-ops/achievements`](https://github.com/icohangar-ops/achievements) (milestone tracking) and adds a polished dark-themed dashboard for hackathon judges.
+> Wraps [`icohangar-ops/agent-observability`](https://github.com/icohangar-ops/agent-observability) (signed audit trail) and [`icohangar-ops/achievements`](https://github.com/icohangar-ops/achievements) (milestone tracking) and adds a polished dark-themed dashboard for review and audit.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-d4a84b.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -11,7 +11,7 @@
 
 ## What this is
 
-Pythia is a multi-agent trading mesh for the [Delphi Agent Arena Competition](https://dorahacks.io/) (Gensyn's information-market arena). Every decision the mesh makes — every analyst estimate, every consensus round, every risk gating, every trade execution — is written to an append-only JSONL **audit log** signed with Ed25519.
+Pythia is a multi-agent trading mesh for the Gensyn's Delphi information-market protocol (Gensyn's information-market arena). Every decision the mesh makes — every analyst estimate, every consensus round, every risk gating, every trade execution — is written to an append-only JSONL **audit log** signed with Ed25519.
 
 `pythia-observability` is the **read-side** of that audit log. It does three jobs:
 
@@ -130,7 +130,7 @@ Open <http://127.0.0.1:8088/> in your browser. You'll see:
 - **Achievements grid** — every achievement as a card. Locked = grayscale; unlocked = gold border + glow.
 - **Trade detail drawer** — click any row to slide in the full decision chain: all analyst estimates (with rationale + evidence), the consensus decision JSON, the risk plan, the trade receipt, the settlement, and the signature.
 
-The dashboard auto-refreshes every 15 seconds — judges can watch trades land live during a competition.
+The dashboard auto-refreshes every 15 seconds — judges can watch trades land live during a trading session.
 
 ![Dashboard hero](docs/assets/replay-hero.png)
 ![Trade detail drawer](docs/assets/replay-drawer.png)
@@ -336,7 +336,7 @@ The audit-reader tests cover: lazy iteration, eager read, market slicing, time f
 ## Design notes
 
 - **Why read-only?** The audit log is the *evidence* that Pythia's trades were legitimate. The replay UI must not be able to mutate it — otherwise judges couldn't trust what they see. All writes happen in the executor pipeline (signed + persisted before any HTTP request returns).
-- **Why JSONL and not SQLite?** Append-only JSONL is trivially auditable (judges can `tail -f` it), works on any filesystem, and is small enough for a 2-week competition run (a few hundred entries). SQLite would be overkill and harder to inspect by hand.
+- **Why JSONL and not SQLite?** Append-only JSONL is trivially auditable (judges can `tail -f` it), works on any filesystem, and is small enough for a short production run (a few hundred entries). SQLite would be overkill and harder to inspect by hand.
 - **Why a fresh `AuditLogReader` per request?** So the dashboard picks up newly appended entries without manual cache invalidation. The audit log is small; the cost is negligible. (For production-scale use, an mtime-based cache would be the next step.)
 - **Why vanilla JS in the dashboard?** No build step, no Node.js dependency, no framework churn. The dashboard is a single HTML file — judges can `view-source` and read every line. The chart is a hand-rolled canvas (no Chart.js dep).
 - **Why dark navy + gold?** Oracle / Delphi / Pythia theme — the same palette as the parent monorepo's design PDF. Serif headings (Iowan Old Style / Palatino / Georgia) for gravitas; mono for the numbers (JetBrains Mono / Fira Code).

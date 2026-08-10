@@ -22,7 +22,6 @@ from .types import ConsensusConfig, ConsensusDecision, Estimate
 # a gap of 0.25 (huge in Brier terms) maps to a ratio of ~e^1 ≈ 2.72.
 _DEFAULT_BRIER_ALPHA = 4.0
 
-
 class ConsensusEngine:
     """Stateful consensus engine.
 
@@ -102,7 +101,7 @@ class ConsensusEngine:
     def explain(self, decision: ConsensusDecision) -> str:
         """Produce a human-readable explanation of how the decision was reached.
 
-        This string is intended for the audit log and the demo replay UI —
+        This string is intended for the audit log and the demo replay UI 
         it lets a judge (or a future you) see at a glance why the mesh chose
         to trade / skip / wait on a given market.
         """
@@ -160,6 +159,5 @@ class ConsensusEngine:
             f"\nWhy this gate?\n  {gate_blurb}\n"
             f"\nHow was the probability fused?\n  {method_blurb}\n"
         )
-
 
 __all__ = ["ConsensusEngine"]

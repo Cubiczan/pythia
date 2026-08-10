@@ -23,11 +23,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # ATT docs: https://docs.gensyn.ai/tech/agentic-trading
 ATT_DOCS_URL = "https://docs.gensyn.ai/tech/agentic-trading"
 
-
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
-
 
 class MarketStatus(str, Enum):
     """Lifecycle state of a Delphi market.
@@ -42,7 +40,6 @@ class MarketStatus(str, Enum):
     SETTLED = "SETTLED"
     CANCELLED = "CANCELLED"
 
-
 class OrderSide(str, Enum):
     """Side of a binary Delphi market the agent is taking.
 
@@ -52,7 +49,6 @@ class OrderSide(str, Enum):
 
     YES = "YES"
     NO = "NO"
-
 
 class MarketCategory(str, Enum):
     """Delphi market categories.
@@ -70,7 +66,6 @@ class MarketCategory(str, Enum):
     SUBJECTIVE = "SUBJECTIVE"
     OTHER = "OTHER"
 
-
 class OrderStatus(str, Enum):
     """Status of a submitted order, as reported by ATT on the receipt."""
 
@@ -79,18 +74,15 @@ class OrderStatus(str, Enum):
     CANCELLED = "CANCELLED"
     REJECTED = "REJECTED"
 
-
 class SettlementOutcome(str, Enum):
     """Outcome a market was resolved to by the AI arbiter."""
 
     YES = "YES"
     NO = "NO"
 
-
 # ---------------------------------------------------------------------------
 # Core market / orderbook models
 # ---------------------------------------------------------------------------
-
 
 def _ensure_utc(value: datetime) -> datetime:
     """Coerce a naive datetime to UTC.
@@ -102,7 +94,6 @@ def _ensure_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value
-
 
 def _coerce_utc_validator(v: object) -> object:
     """Pre-validator that accepts both datetime instances and ISO strings.
@@ -121,7 +112,6 @@ def _coerce_utc_validator(v: object) -> object:
             return v  # let pydantic raise its own validation error
         return _ensure_utc(parsed)
     return v
-
 
 class Market(BaseModel):
     """A single Delphi information market.
@@ -159,7 +149,6 @@ class Market(BaseModel):
     def _coerce_utc(cls, v: object) -> object:
         return _coerce_utc_validator(v)
 
-
 class OrderBookLevel(BaseModel):
     """A single price level on the ATT order book.
 
@@ -169,7 +158,6 @@ class OrderBookLevel(BaseModel):
 
     price: float = Field(..., ge=0.0, le=1.0)
     size_usd: float = Field(..., ge=0.0)
-
 
 class OrderBook(BaseModel):
     """Order book for a single market.
@@ -186,13 +174,12 @@ class OrderBook(BaseModel):
     asks: list[OrderBookLevel] = Field(default_factory=list)
     # VERIFY: ATT may also surface a ``spread`` or ``mid`` field.
 
-
 class TradeReceipt(BaseModel):
     """Receipt returned by ``POST /orders``.
 
     Includes the ATT order id (used for cancellation / status checks), the
     fill price (which may differ from the limit if partial fill), and the
-    ``signed_by`` field indicating which signing key attested to the order —
+    ``signed_by`` field indicating which signing key attested to the order 
     useful for the audit trail in ``pythia-observability``.
     """
 
@@ -216,7 +203,6 @@ class TradeReceipt(BaseModel):
     def _coerce_utc(cls, v: object) -> object:
         return _coerce_utc_validator(v)
 
-
 class Position(BaseModel):
     """The agent's current position in a single market.
 
@@ -233,7 +219,6 @@ class Position(BaseModel):
     avg_fill_price: float = Field(..., ge=0.0, le=1.0)
     current_value_usd: float
     unrealized_pnl_usd: float
-
 
 class Settlement(BaseModel):
     """A resolved Delphi market.
@@ -273,11 +258,9 @@ class Settlement(BaseModel):
     def _coerce_utc(cls, v: object) -> object:
         return _coerce_utc_validator(v)
 
-
 # ---------------------------------------------------------------------------
 # Market event stream (discriminated union)
 # ---------------------------------------------------------------------------
-
 
 class _MarketEventBase(BaseModel):
     """Common fields across all market events.
@@ -297,7 +280,6 @@ class _MarketEventBase(BaseModel):
     def _coerce_utc(cls, v: object) -> object:
         return _coerce_utc_validator(v)
 
-
 class MarketOpened(_MarketEventBase):
     """A new market was just listed on Delphi."""
 
@@ -306,14 +288,12 @@ class MarketOpened(_MarketEventBase):
     category: MarketCategory
     # VERIFY: ATT may use "MARKET_OPENED" / "market.opened" — confirm casing.
 
-
 class PriceUpdated(_MarketEventBase):
     """A market's YES/NO prices moved."""
 
     type: Literal["price_updated"] = "price_updated"
     yes_price: float = Field(..., ge=0.0, le=1.0)
     no_price: float = Field(..., ge=0.0, le=1.0)
-
 
 class OrderMatched(_MarketEventBase):
     """An order (ours or someone else's) was matched on this market."""
@@ -324,7 +304,6 @@ class OrderMatched(_MarketEventBase):
     fill_price: float = Field(..., ge=0.0, le=1.0)
     # VERIFY: ATT may include ``participant`` / ``agent_id`` field.
 
-
 class MarketSettled(_MarketEventBase):
     """A market was just settled by the AI arbiter."""
 
@@ -333,13 +312,11 @@ class MarketSettled(_MarketEventBase):
     arbiter_model: str
     settlement_price: float = Field(..., ge=0.0, le=1.0)
 
-
 # Discriminated union — pydantic dispatches on the ``type`` field.
 MarketEvent = Annotated[
     Union[MarketOpened, PriceUpdated, OrderMatched, MarketSettled],
     Field(discriminator="type"),
 ]
-
 
 __all__ = [
     "ATT_DOCS_URL",

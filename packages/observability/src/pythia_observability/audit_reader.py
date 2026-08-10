@@ -13,7 +13,7 @@ The reader is **stateless across calls** — every method re-reads the file
 unless `read_all()` has been called (in which case subsequent calls reuse the
 cached list). This trades a little I/O for simplicity; the audit log is
 append-only and typically small (a few hundred entries for a 2-week Delphi
-competition run).
+production run).
 
 # VERIFY: the upstream `icohangar-ops/agent-observability` may emit one JSONL
 # record per pipeline *stage* (one line for each of estimates / consensus /
@@ -37,7 +37,6 @@ from .types import AuditEntry, PnLMilestone
 
 _log = logging.getLogger(__name__)
 
-
 def _parse_timestamp(ts: str) -> datetime:
     """Parse an ISO-8601 timestamp into a timezone-aware UTC datetime.
 
@@ -48,7 +47,6 @@ def _parse_timestamp(ts: str) -> datetime:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
     return dt.astimezone(UTC)
-
 
 def _compare(actual: float, op: str, threshold: float) -> bool:
     """Apply a comparison operator: >=, <=, ==, >, <."""
@@ -63,7 +61,6 @@ def _compare(actual: float, op: str, threshold: float) -> bool:
     if op == "==":
         return actual == threshold
     raise ValueError(f"Unsupported operator: {op!r}")
-
 
 class AuditLogReader:
     """Lazily- or eagerly-read JSONL audit log + derive analytics.
@@ -361,6 +358,5 @@ class AuditLogReader:
             "skipped_reasons": reasons,
             "signature_stub_count": stub_count,
         }
-
 
 __all__ = ["AuditLogReader"]

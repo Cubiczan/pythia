@@ -45,7 +45,6 @@ from pythia_risk.types import (
 # we treat it as no edge. 2 percentage points (0.02) per the design.
 NO_EDGE_TOLERANCE: float = 0.02
 
-
 class RiskEngine:
     """Delphi risk-gating engine wrapping icohangar-ops/meshcfo.
 

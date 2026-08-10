@@ -51,7 +51,6 @@ not** submit. Safe default for development + demos.
 be set.
 """
 
-
 class ExecutorConfig(BaseModel):
     """Configuration for the ``PythiaExecutor``.
 
@@ -73,11 +72,9 @@ class ExecutorConfig(BaseModel):
     retry_max: int = Field(default=3, ge=1, le=20)
     retry_backoff_sec: int = Field(default=5, ge=0, le=600)
 
-
 # ---------------------------------------------------------------------------
 # PipelineResult — the full output of one run_for_market() call.
 # ---------------------------------------------------------------------------
-
 
 class PipelineResult(BaseModel):
     """The full decision chain for one market.
@@ -104,7 +101,6 @@ class PipelineResult(BaseModel):
     timestamp: str = Field(
         default_factory=lambda: datetime.now(UTC).isoformat()
     )
-
 
 __all__ = [
     "ConsensusDecision",

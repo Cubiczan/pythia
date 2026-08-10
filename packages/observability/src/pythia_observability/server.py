@@ -2,7 +2,7 @@
 
 The server is intentionally *read-only*. It never writes to the audit log; it
 only parses it on each request (the log is append-only and small enough that
-re-reading per request is fine for a hackathon demo; for production use we'd
+re-reading per request is fine for typical workloads; for production use we'd
 cache + invalidate on file mtime).
 
 Endpoints
@@ -44,7 +44,6 @@ _JINJA_ENV = Environment(
     autoescape=select_autoescape(["html", "xml"]),
     enable_async=False,
 )
-
 
 class ReplayServer:
     """Holds the audit log path + optional achievements config and exposes
@@ -224,7 +223,6 @@ class ReplayServer:
         )
         uvicorn.run(application, host=host, port=port, log_level="info")
 
-
 # Convenience module-level factory so `uvicorn ... --factory` works.
 def make_app(
     log_path: Path | None = None,
@@ -253,7 +251,6 @@ def make_app(
         if env_cfg:
             achievements_config_path = Path(env_cfg)
     return ReplayServer(log_path, achievements_config_path).app()
-
 
 # Re-export JSONResponse for callers that want to monkey-patch / wrap.
 __all__ = ["JSONResponse", "ReplayServer", "json", "make_app"]

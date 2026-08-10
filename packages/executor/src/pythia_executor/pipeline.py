@@ -52,7 +52,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-
 class PythiaExecutor:
     """The trade-orchestration pipeline.
 
@@ -360,7 +359,7 @@ class PythiaExecutor:
         """Sign + submit a live order via ``DelphiClient.place_order``.
 
         # VERIFY: how the signature is transmitted to ATT. The current
-        # adapter ``place_order`` does not accept a signature parameter —
+        # adapter ``place_order`` does not accept a signature parameter 
         # we attach it to the receipt as an extra field for the audit log.
         # Once the adapter exposes a ``signature=`` kwarg (or a header
         # hook), pass it through there.
@@ -507,6 +506,5 @@ class PythiaExecutor:
             "skipped_reason": result.skipped_reason,
             "timestamp": result.timestamp,
         }
-
 
 __all__ = ["PythiaExecutor"]

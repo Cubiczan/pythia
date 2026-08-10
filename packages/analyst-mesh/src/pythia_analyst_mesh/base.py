@@ -29,10 +29,8 @@ from .types import ChatMessage, Estimate, LLMConfig, MarketContext
 
 logger = logging.getLogger(__name__)
 
-
 class LLMCallError(RuntimeError):
     """Raised when every retry attempt on an LLM call has failed."""
-
 
 class BaseAnalyst(ABC):
     """Abstract base for specialist analyst agents.

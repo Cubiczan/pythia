@@ -55,7 +55,6 @@ from pythia_risk.types import (
     RiskConfig,
 )
 
-
 def _default_config() -> RiskConfig:
     """Default config for the CLI (mirrors configs/live-mvp.toml [risk])."""
     return RiskConfig(
@@ -74,11 +73,9 @@ def _default_config() -> RiskConfig:
         },
     )
 
-
 def _load_json(path: str) -> dict[str, Any]:
     with open(path, "r", encoding="utf-8") as fh:
         return json.load(fh)
-
 
 def _cmd_size(args: argparse.Namespace) -> int:
     stake = size_trade_kelly(
@@ -90,7 +87,6 @@ def _cmd_size(args: argparse.Namespace) -> int:
     )
     print(f"{stake:.2f}")
     return 0
-
 
 def _cmd_evaluate(args: argparse.Namespace) -> int:
     decision_data = _load_json(args.decision)
@@ -125,7 +121,6 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     output = plan.model_dump()
     print(json.dumps(output, indent=2, default=str))
     return 0 if plan.decision == "APPROVE" else 1
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -165,12 +160,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     return parser
 
-
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     return int(args.func(args))
-
 
 if __name__ == "__main__":
     sys.exit(main())
