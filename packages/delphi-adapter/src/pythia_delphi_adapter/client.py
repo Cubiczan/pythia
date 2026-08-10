@@ -1,509 +1,461 @@
-"""Async client for the Gensyn Delphi Agentic Trading Toolkit (ATT).
+"""Async client for the @gensyn-ai/gensyn-delphi-sdk via a Node subprocess bridge.
 
-ATT docs: https://docs.gensyn.ai/tech/agentic-trading
+This is the only module the rest of the Pythia mesh imports from
+``pythia_delphi_adapter``. It wraps every SDK method the mesh needs behind
+typed Python coroutines, so callers never see raw JSON-RPC.
 
-This module wraps every ATT HTTP + WebSocket endpoint the rest of the
-Pythia mesh needs into a single ``DelphiClient`` class. The client:
+Architecture:
+    DelphiClient (Python)
+        └─ Bridge (Python subprocess manager)
+             └─ node bridge.mjs (Node.js)
+                  └─ @gensyn-ai/gensyn-delphi-sdk (TypeScript)
+                       └─ DelphiClient (TypeScript)
+                            ├─ REST API (listMarkets, getMarket, listPositions)
+                            └─ viem WalletClient (buyShares, sellShares, redeem, liquidate)
 
-- uses ``httpx.AsyncClient`` for both HTTP and WebSocket transport,
-- retries idempotent GETs (and the idempotency-keyed ``POST /orders``) with
-  ``tenacity`` exponential backoff,
-- parses every response into the pydantic models defined in
-  ``pythia_delphi_adapter.models``,
-- surfaces honest errors (raises ``DelphiAPIError`` on non-2xx responses),
-- supports async-context-manager usage so the underlying HTTP connection
-  pool is closed cleanly.
+The Python ``DelphiClient`` is a thin façade. Each method:
+  1. Validates params via the pydantic models in ``models.py``.
+  2. Calls ``Bridge.call(method, params)`` which sends a JSON-RPC request.
+  3. Parses the result back into a typed pydantic model.
 
-Anywhere the live ATT response shape is uncertain, the code is annotated
-with ``# VERIFY:`` and a sensible default is assumed. This is a reference implementation
-— wire it up against the live ATT, run the smoke tests, fix the field
-names, then go live.
+Configuration:
+    The SDK reads its config from environment variables. The Python client
+    does NOT duplicate this — set the env vars before constructing the
+    client (or before calling ``start()`` on the underlying bridge):
+
+        DELPHI_NETWORK=competition-testnet
+        DELPHI_API_ACCESS_KEY=...     # from https://delphi-api-access.gensyn.ai/
+        DELPHI_SIGNER_TYPE=private_key
+        WALLET_PRIVATE_KEY=0x...      # only for private_key signing
+
+    For CDP Server Wallet signing (the SDK default), set CDP_API_KEY_ID,
+    CDP_API_KEY_SECRET, CDP_WALLET_SECRET, CDP_WALLET_ADDRESS instead.
+
+Paper mode:
+    The SDK has no built-in "paper" flag — every ``buyShares`` / ``sellShares``
+    call sends a real on-chain transaction. Pythia's paper mode is implemented
+    at the executor level (``pythia_executor``): the executor simply doesn't
+    call ``buy_shares`` / ``sell_shares`` in paper mode, but still calls the
+    read-only methods (``list_markets``, ``get_market``, ``quote_buy``) so
+    the rest of the pipeline runs identically.
 """
 
 from __future__ import annotations
 
-import json
-import logging
-from collections.abc import AsyncIterator
-from datetime import datetime
-from types import TracebackType
-from typing import Any
-from urllib.parse import quote
+import asyncio
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, AsyncIterator
 
-import httpx
-import websockets
-from tenacity import (
-    AsyncRetrying,
-    RetryError,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
-
-from pythia_delphi_adapter.models import (
-    ATT_DOCS_URL,
+from .bridge import Bridge, DEFAULT_CALL_TIMEOUT_SEC
+from .errors import BridgeError, DelphiAPIError
+from .models import (
+    BalanceResponse,
+    BuySharesParams,
+    EnsureTokenApprovalParams,
+    EnsureTokenApprovalResponse,
+    HealthResponse,
+    LiquidateParams,
+    LiquidateResponse,
+    ListMarketsParams,
+    ListPositionsParams,
     Market,
-    MarketEvent,
-    MarketStatus,
-    OrderBook,
-    OrderSide,
     Position,
-    Settlement,
+    QuoteBuyParams,
+    QuoteBuyResponse,
+    QuoteSellParams,
+    QuoteSellResponse,
+    RedeemMarketParams,
+    RedeemMarketResponse,
+    SellSharesParams,
     TradeReceipt,
 )
 
-logger = logging.getLogger(__name__)
 
-# Default ATT base URL. VERIFY: confirm against ATT quickstart.
-DEFAULT_ENDPOINT = "https://api.delphi.gensyn.ai"
+__all__ = ["DelphiClient", "DEFAULT_CALL_TIMEOUT_SEC"]
 
-# Retry policy shared across idempotent calls.
-# 3 attempts, exponential backoff 1s → 2s → 4s, retry on transient errors.
-_RETRY_STOP = stop_after_attempt(3)
-_RETRY_WAIT = wait_exponential(multiplier=1, min=1, max=8)
-
-class DelphiAPIError(Exception):
-    """Raised when ATT returns a non-2xx HTTP response.
-
-    Carries the original ``httpx.Response`` so callers can inspect the body
-    for ATT-specific error codes.
-    """
-
-    def __init__(self, message: str, *, response: httpx.Response | None = None) -> None:
-        super().__init__(message)
-        self.response = response
-        self.status_code = response.status_code if response is not None else None
-
-class DelphiAuthError(DelphiAPIError):
-    """Raised on 401/403 — API key missing or invalid."""
-
-class DelphiNotFoundError(DelphiAPIError):
-    """Raised on 404 — market / order / position not found."""
 
 class DelphiClient:
-    """Async client for the Gensyn Delphi ATT API.
+    """Async client for the Gensyn Delphi SDK.
 
-    Usage::
+    Usage:
 
-        async with DelphiClient(api_key="dphi_live_...") as client:
-            markets = await client.list_markets(status=MarketStatus.OPEN)
+        async with DelphiClient() as client:
+            health = await client.health()
+            markets = await client.list_markets(status="open", limit=10)
+            quote = await client.quote_buy(
+                market_address="0x...",
+                outcome_idx=0,
+                shares_out="1000000000000000000",  # 1 share
+            )
 
-    The client is safe to share across asyncio tasks (``httpx.AsyncClient``
-    is internally concurrency-safe). It is **not** safe to use after
-    ``aclose`` has been called.
+    The ``async with`` context manager starts the Node bridge on enter and
+    stops it on exit. For long-running services, construct once and call
+    ``await client.start()`` / ``await client.stop()`` manually.
     """
 
     def __init__(
         self,
-        api_key: str,
-        endpoint: str = DEFAULT_ENDPOINT,
-        timeout_sec: float = 30.0,
         *,
-        http_client: httpx.AsyncClient | None = None,
-        user_agent: str = "pythia-delphi-adapter/0.1",
+        bridge: Bridge | None = None,
+        network: str | None = None,
+        env: dict[str, str] | None = None,
+        auto_start: bool = True,
     ) -> None:
-        if not api_key:
-            raise ValueError("api_key is required — set DELPHI_API_KEY or pass it explicitly.")
-
-        self.api_key = api_key
-        self.endpoint = endpoint.rstrip("/")
-        self.timeout_sec = timeout_sec
-        self.user_agent = user_agent
-
-        # If the caller injected a client (used by tests via MockTransport),
-        # we take ownership of closing it only if we created it.
-        self._owns_http_client = http_client is None
-        self._http: httpx.AsyncClient = http_client or httpx.AsyncClient(
-            base_url=self.endpoint,
-            timeout=timeout_sec,
-            headers=self._default_headers(),
-        )
+        self._env = dict(env or {})
+        if network:
+            self._env.setdefault("DELPHI_NETWORK", network)
+        self._bridge = bridge or Bridge(env=self._env)
+        self._owns_bridge = bridge is None
+        self._auto_start = auto_start
 
     # ------------------------------------------------------------------
-    # Context manager
+    # Lifecycle
     # ------------------------------------------------------------------
+
+    async def start(self) -> None:
+        """Start the Node bridge subprocess."""
+        await self._bridge.start()
+
+    async def stop(self) -> None:
+        """Stop the Node bridge subprocess (if we own it)."""
+        if self._owns_bridge:
+            await self._bridge.stop()
 
     async def __aenter__(self) -> "DelphiClient":
+        if self._auto_start:
+            # Start the bridge regardless of ownership — start() is idempotent.
+            await self._bridge.start()
         return self
 
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: TracebackType | None,
-    ) -> None:
-        await self.aclose()
-
-    async def aclose(self) -> None:
-        """Close the underlying HTTP connection pool."""
-        if self._owns_http_client:
-            await self._http.aclose()
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        if self._owns_bridge:
+            await self._bridge.stop()
 
     # ------------------------------------------------------------------
-    # Internals
+    # Health & info
     # ------------------------------------------------------------------
 
-    def _default_headers(self) -> dict[str, str]:
-        """Headers sent on every ATT request.
-
-        # VERIFY: ATT may use ``X-Delphi-Api-Key`` instead of a Bearer token.
-        We send both forms to be safe (extra headers are harmless).
-        """
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "X-Delphi-Api-Key": self.api_key,  # VERIFY: header name.
-            "User-Agent": self.user_agent,
-            "Accept": "application/json",
-        }
-
-    async def _request(
-        self,
-        method: str,
-        path: str,
-        *,
-        params: dict[str, Any] | None = None,
-        json_body: dict[str, Any] | None = None,
-        extra_headers: dict[str, str] | None = None,
-    ) -> httpx.Response:
-        """Single HTTP request with error mapping. Does not retry.
-
-        Retries are applied at the public-method level (only on idempotent
-        operations) so we don't double-submit non-idempotent calls.
-        """
-        headers: dict[str, str] = {}
-        if extra_headers:
-            headers.update(extra_headers)
-
-        try:
-            response = await self._http.request(
-                method,
-                path,
-                params=params,
-                json=json_body,
-                headers=headers,
-            )
-        except httpx.HTTPError as exc:
-            # Transport-level error (connection, DNS, timeout). Let the
-            # tenacity retry layer above decide whether to retry.
-            raise DelphiAPIError(f"ATT transport error: {exc!r}") from exc
-
-        if response.status_code in (401, 403):
-            raise DelphiAuthError(
-                f"ATT auth failed ({response.status_code}): {response.text}",
-                response=response,
-            )
-        if response.status_code == 404:
-            raise DelphiNotFoundError(
-                f"ATT resource not found: {method} {path}",
-                response=response,
-            )
-        if response.status_code >= 400:
-            raise DelphiAPIError(
-                f"ATT {method} {path} → {response.status_code}: {response.text}",
-                response=response,
-            )
-        return response
-
-    async def _request_with_retry(
-        self,
-        method: str,
-        path: str,
-        *,
-        params: dict[str, Any] | None = None,
-        json_body: dict[str, Any] | None = None,
-        extra_headers: dict[str, str] | None = None,
-    ) -> httpx.Response:
-        """``_request`` wrapped in tenacity retry (3 attempts, exp backoff)."""
-        try:
-            async for attempt in AsyncRetrying(
-                stop=_RETRY_STOP,
-                wait=_RETRY_WAIT,
-                retry=retry_if_exception_type((DelphiAPIError, httpx.HTTPError)),
-                reraise=True,
-            ):
-                with attempt:
-                    return await self._request(
-                        method,
-                        path,
-                        params=params,
-                        json_body=json_body,
-                        extra_headers=extra_headers,
-                    )
-        except RetryError as exc:  # pragma: no cover — defensive
-            raise DelphiAPIError("ATT retry exhausted") from exc
-        return None  # type: ignore[return-value]
+    async def health(self, *, timeout: float = 10.0) -> HealthResponse:
+        """Check REST API health. Does not require authentication."""
+        result = await self._call("health", {}, timeout=timeout)
+        return HealthResponse.model_validate(result)
 
     # ------------------------------------------------------------------
-    # Markets
+    # Market reads
     # ------------------------------------------------------------------
 
     async def list_markets(
         self,
-        status: MarketStatus | None = None,
+        *,
+        skip: int = 0,
+        limit: int = 50,
+        order_by: str = "liquidity",
+        status: str | None = None,
         category: str | None = None,
-        limit: int = 100,
+        verifiable: bool | None = None,
+        competition_id: str | None = None,
+        prices_and_implied_probabilities: bool = False,
+        timeout: float = 30.0,
     ) -> list[Market]:
-        """List Delphi markets. Maps to ``GET /markets``.
+        """List markets with pagination and optional filters.
 
-        Parameters
-        ----------
-        status:
-            Optional lifecycle filter (OPEN / CLOSED / SETTLED / CANCELLED).
-        category:
-            Optional category filter. Pass the raw string (e.g. ``"CRYPTO"``)
-            or a ``MarketCategory`` value.
-        limit:
-            Page size. The client currently fetches a single page of up to
-            ``limit`` markets. If ATT uses cursor-based pagination, callers
-            should loop manually — see ``# VERIFY:`` note in source.
-
-        Returns
-        -------
-        list[Market]
-            Parsed markets, ordered by recency (ATT default).
+        Set ``prices_and_implied_probabilities=True`` to fetch on-chain spot
+        prices and implied probabilities for each market's outcomes via a
+        multicall. This is slower (one extra RPC round-trip per batch) but
+        required for the risk engine to size positions against current prices.
         """
-        params: dict[str, Any] = {"limit": limit}
-        if status is not None:
-            params["status"] = status.value
-        if category is not None:
-            # Accept either a MarketCategory enum or a raw string.
-            from pythia_delphi_adapter.models import MarketCategory
+        params = ListMarketsParams(
+            skip=skip,
+            limit=limit,
+            order_by=order_by,
+            status=status,
+            category=category,
+            verifiable=verifiable,
+            competition_id=competition_id,
+            prices_and_implied_probabilities=prices_and_implied_probabilities,
+        )
+        result = await self._call("listMarkets", params.model_dump(by_alias=True), timeout=timeout)
+        markets_data = (result or {}).get("markets") or []
+        return [Market.model_validate(m) for m in markets_data]
 
-            cat = category.value if isinstance(category, MarketCategory) else category
-            params["category"] = cat
-
-        response = await self._request_with_retry("GET", "/markets", params=params)
-        payload = response.json()
-        # VERIFY: ATT may wrap results in {"markets": [...]} or return a bare list.
-        items = payload.get("markets", payload) if isinstance(payload, dict) else payload
-        return [Market.model_validate(item) for item in items]
-
-    async def get_market(self, market_id: str) -> Market:
-        """Fetch full metadata for one market. Maps to ``GET /markets/{id}``."""
-        path = f"/markets/{quote(market_id, safe='')}"
-        response = await self._request_with_retry("GET", path)
-        return Market.model_validate(response.json())
-
-    async def get_orderbook(self, market_id: str) -> OrderBook:
-        """Fetch the current order book for a market.
-
-        Maps to ``GET /markets/{id}/orderbook``.
-        """
-        path = f"/markets/{quote(market_id, safe='')}/orderbook"
-        response = await self._request_with_retry("GET", path)
-        payload = response.json()
-        # Inject market_id if ATT omits it in the body.
-        if isinstance(payload, dict) and "market_id" not in payload:
-            payload = {**payload, "market_id": market_id}
-        return OrderBook.model_validate(payload)
-
-    # ------------------------------------------------------------------
-    # Orders
-    # ------------------------------------------------------------------
-
-    async def place_order(
+    async def get_market(
         self,
         market_id: str,
-        side: OrderSide,
-        size_usd: float,
-        limit_price: float | None = None,
-        correlation_id: str | None = None,
-    ) -> TradeReceipt:
-        """Submit a new order. Maps to ``POST /orders``.
-
-        Always sends an ``Idempotency-Key`` header so that a retry (after a
-        timeout, for example) cannot double-submit. If ``correlation_id``
-        is provided it is used as the idempotency key; otherwise a UUID4 is
-        generated. ``correlation_id`` is also echoed in the request body
-        so the audit trail in ``pythia-observability`` can correlate the
-        Pythia decision with the ATT order.
-
-        Parameters
-        ----------
-        market_id:
-            Target Delphi market.
-        side:
-            YES or NO.
-        size_usd:
-            Order size in USD. Must be > 0.
-        limit_price:
-            Optional limit price (0..1). If omitted the order is treated as
-            a market order — VERIFY: ATT's market-order semantics.
-        correlation_id:
-            Caller-supplied id used as the Idempotency-Key header. If
-            omitted, a UUID4 is generated.
-        """
-        import uuid
-
-        if size_usd <= 0:
-            raise ValueError("size_usd must be > 0")
-        if limit_price is not None and not (0.0 <= limit_price <= 1.0):
-            raise ValueError("limit_price must be in [0.0, 1.0]")
-
-        idempotency_key = correlation_id or str(uuid.uuid4())
-
-        body: dict[str, Any] = {
-            "market_id": market_id,
-            "side": side.value,
-            "size_usd": size_usd,
-            "correlation_id": correlation_id or idempotency_key,
+        *,
+        competition_id: str | None = None,
+        prices_and_implied_probabilities: bool = False,
+        timeout: float = 15.0,
+    ) -> Market:
+        """Retrieve a single market by its app UUID or contract address."""
+        params = {
+            "id": market_id,
+            "competitionId": competition_id,
+            "pricesAndImpliedProbabilities": prices_and_implied_probabilities,
         }
-        if limit_price is not None:
-            body["limit_price"] = limit_price
+        result = await self._call("getMarket", params, timeout=timeout)
+        return Market.model_validate(result)
 
-        # Idempotency-Key is safe to retry — wrap in tenacity.
-        response = await self._request_with_retry(
-            "POST",
-            "/orders",
-            json_body=body,
-            extra_headers={"Idempotency-Key": idempotency_key},  # VERIFY: header name.
+    async def list_positions(
+        self,
+        wallet: str,
+        *,
+        skip: int = 0,
+        limit: int = 50,
+        redeemed_or_liquidated: bool | None = None,
+        timeout: float = 15.0,
+    ) -> list[Position]:
+        """Retrieve positions for a given wallet address."""
+        params = ListPositionsParams(
+            wallet=wallet,
+            skip=skip,
+            limit=limit,
+            redeemed_or_liquidated=redeemed_or_liquidated,
         )
-        return TradeReceipt.model_validate(response.json())
+        result = await self._call("listPositions", params.model_dump(by_alias=True), timeout=timeout)
+        positions_data = (result or {}).get("positions") or []
+        return [Position.model_validate(p) for p in positions_data]
 
-    async def cancel_order(self, order_id: str) -> bool:
-        """Cancel a resting order. Maps to ``DELETE /orders/{id}``.
+    async def get_market_status(self, market_address: str, *, timeout: float = 10.0) -> str:
+        """Read a market's lifecycle status directly from its gateway.
 
-        Returns ``True`` if ATT acknowledged the cancellation. Returns
-        ``False`` if the order was already terminal (filled / cancelled).
+        Unlike ``get_market``, this hits the chain rather than the indexed
+        REST API, so it reflects state that hasn't been indexed yet.
         """
-        path = f"/orders/{quote(order_id, safe='')}"
-        response = await self._request_with_retry("DELETE", path)
-        # VERIFY: ATT's acknowledgement shape. Assume {"cancelled": true}.
-        payload = response.json() if response.content else {}
-        if isinstance(payload, dict):
-            return bool(payload.get("cancelled", True))
-        return True
+        result = await self._call(
+            "getMarketStatus", {"marketAddress": market_address}, timeout=timeout
+        )
+        return str(result)
 
     # ------------------------------------------------------------------
-    # Positions & settlements
+    # Quotes (no on-chain tx)
     # ------------------------------------------------------------------
 
-    async def get_positions(self) -> list[Position]:
-        """List the agent's open positions. Maps to ``GET /positions``."""
-        response = await self._request_with_retry("GET", "/positions")
-        payload = response.json()
-        items = payload.get("positions", payload) if isinstance(payload, dict) else payload
-        return [Position.model_validate(item) for item in items]
-
-    async def get_settlements(
+    async def quote_buy(
         self,
-        since: datetime | None = None,
-    ) -> list[Settlement]:
-        """List recent AI-as-arbiter settlements. Maps to ``GET /settlements``.
+        *,
+        market_address: str,
+        outcome_idx: int,
+        shares_out: str,
+        timeout: float = 15.0,
+    ) -> QuoteBuyResponse:
+        """Quote the collateral required to buy ``shares_out`` of an outcome."""
+        params = QuoteBuyParams(
+            marketAddress=market_address,
+            outcomeIdx=outcome_idx,
+            sharesOut=shares_out,
+        )
+        result = await self._call("quoteBuy", params.model_dump(by_alias=True), timeout=timeout)
+        return QuoteBuyResponse.model_validate(result)
 
-        Parameters
-        ----------
-        since:
-            If provided, only return settlements resolved at or after this
-            timestamp. Used by ``SettlementListener`` to poll incrementally.
-        """
-        params: dict[str, Any] = {}
-        if since is not None:
-            params["since"] = since.isoformat()
-
-        response = await self._request_with_retry("GET", "/settlements", params=params)
-        payload = response.json()
-        items = payload.get("settlements", payload) if isinstance(payload, dict) else payload
-        return [Settlement.model_validate(item) for item in items]
-
-    # ------------------------------------------------------------------
-    # WebSocket event stream
-    # ------------------------------------------------------------------
-
-    async def subscribe_events(
+    async def quote_sell(
         self,
-        market_id: str | None = None,
-    ) -> AsyncIterator[MarketEvent]:
-        """Subscribe to the ATT WebSocket event stream.
+        *,
+        market_address: str,
+        outcome_idx: int,
+        shares_in: str,
+        timeout: float = 15.0,
+    ) -> QuoteSellResponse:
+        """Quote the collateral you'd receive for selling ``shares_in``."""
+        params = QuoteSellParams(
+            marketAddress=market_address,
+            outcomeIdx=outcome_idx,
+            sharesIn=shares_in,
+        )
+        result = await self._call("quoteSell", params.model_dump(by_alias=True), timeout=timeout)
+        return QuoteSellResponse.model_validate(result)
 
-        Yields parsed ``MarketEvent`` instances (``MarketOpened``,
-        ``PriceUpdated``, ``OrderMatched``, ``MarketSettled``) forever,
-        until the caller breaks out of the loop or the connection drops.
+    # ------------------------------------------------------------------
+    # Trading (on-chain writes)
+    # ------------------------------------------------------------------
 
-        Reconnects automatically with exponential backoff on transient
-        failures. If reconnection fails 3 times in a row, raises
-        ``DelphiAPIError``.
+    async def buy_shares(
+        self,
+        *,
+        market_address: str,
+        outcome_idx: int,
+        shares_out: str,
+        max_tokens_in: str,
+        timeout: float = 120.0,
+    ) -> TradeReceipt:
+        """Buy shares of a specific outcome.
 
-        Parameters
-        ----------
-        market_id:
-            Optional filter — if set, ATT should only push events for this
-            market. VERIFY: ATT's per-market subscription semantics.
+        Submits an on-chain transaction via the LMSR Gateway. The
+        ``max_tokens_in`` parameter is slippage protection: the transaction
+        reverts if the collateral required exceeds this amount.
+
+        The SDK returns just ``{transaction_hash}``; we expand it into a
+        full ``TradeReceipt`` with the input parameters and timestamp so
+        the audit log has a complete record.
         """
-        ws_url = self.endpoint.replace("https://", "wss://").replace("http://", "ws://")
-        ws_url = f"{ws_url}/events"  # VERIFY: ATT's WS path.
+        params = BuySharesParams(
+            marketAddress=market_address,
+            outcomeIdx=outcome_idx,
+            sharesOut=shares_out,
+            maxTokensIn=max_tokens_in,
+        )
+        result = await self._call("buyShares", params.model_dump(by_alias=True), timeout=timeout)
+        return TradeReceipt(
+            market_address=market_address,
+            outcome_idx=outcome_idx,
+            side="buy",
+            shares=shares_out,
+            transaction_hash=result.get("transactionHash", ""),
+            max_tokens_in=max_tokens_in,
+            timestamp=datetime.now(timezone.utc),
+        )
 
-        adapter = _get_event_adapter()
+    async def sell_shares(
+        self,
+        *,
+        market_address: str,
+        outcome_idx: int,
+        shares_in: str,
+        min_tokens_out: str,
+        timeout: float = 120.0,
+    ) -> TradeReceipt:
+        """Sell shares of a specific outcome."""
+        params = SellSharesParams(
+            marketAddress=market_address,
+            outcomeIdx=outcome_idx,
+            sharesIn=shares_in,
+            minTokensOut=min_tokens_out,
+        )
+        result = await self._call("sellShares", params.model_dump(by_alias=True), timeout=timeout)
+        return TradeReceipt(
+            market_address=market_address,
+            outcome_idx=outcome_idx,
+            side="sell",
+            shares=shares_in,
+            transaction_hash=result.get("transactionHash", ""),
+            min_tokens_out=min_tokens_out,
+            timestamp=datetime.now(timezone.utc),
+        )
 
-        # Manual reconnect loop. We can't use AsyncRetrying here because
-        # this is an async generator (tenacity's `with attempt:` doesn't
-        # compose cleanly with `yield`).
-        max_attempts = 3
-        attempt = 0
-        while True:
+    async def redeem_market(self, market_address: str, *, timeout: float = 120.0) -> RedeemMarketResponse:
+        """Redeem winning shares in a settled market for collateral."""
+        params = RedeemMarketParams(marketAddress=market_address)
+        result = await self._call("redeemMarket", params.model_dump(by_alias=True), timeout=timeout)
+        return RedeemMarketResponse.model_validate(result)
+
+    async def liquidate(
+        self,
+        *,
+        market_address: str,
+        outcome_indices: list[int],
+        timeout: float = 120.0,
+    ) -> LiquidateResponse:
+        """Liquidate positions in an expired/failed market."""
+        params = LiquidateParams(
+            marketAddress=market_address,
+            outcomeIndices=outcome_indices,
+        )
+        result = await self._call("liquidate", params.model_dump(by_alias=True), timeout=timeout)
+        return LiquidateResponse.model_validate(result)
+
+    # ------------------------------------------------------------------
+    # Token / approval
+    # ------------------------------------------------------------------
+
+    async def ensure_token_approval(
+        self,
+        *,
+        market_address: str,
+        minimum_amount: str,
+        approve_amount: str | None = None,
+        timeout: float = 120.0,
+    ) -> EnsureTokenApprovalResponse:
+        """Ensure the gateway has enough ERC-20 allowance to spend on our behalf.
+
+        Sends an approval transaction only if the current allowance is below
+        ``minimum_amount``. Idempotent — safe to call before every trade.
+        """
+        params = EnsureTokenApprovalParams(
+            marketAddress=market_address,
+            minimumAmount=minimum_amount,
+            approveAmount=approve_amount,
+        )
+        result = await self._call(
+            "ensureTokenApproval", params.model_dump(by_alias=True), timeout=timeout
+        )
+        return EnsureTokenApprovalResponse.model_validate(result)
+
+    # ------------------------------------------------------------------
+    # Balance reads
+    # ------------------------------------------------------------------
+
+    async def get_eth_balance(self, *, timeout: float = 10.0) -> str:
+        """Native ETH balance of the signer wallet (18-decimal string)."""
+        result = await self._call("getEthBalance", {}, timeout=timeout)
+        return _bigint_to_str(result)
+
+    async def get_erc20_balance(
+        self,
+        *,
+        token_address: str | None = None,
+        timeout: float = 10.0,
+    ) -> BalanceResponse:
+        """ERC-20 token balance + decimals for the signer wallet."""
+        params = {"tokenAddress": token_address}
+        result = await self._call("getErc20BalanceWithDecimals", params, timeout=timeout)
+        # The SDK returns {balance: bigint, decimals: number} — bigint is
+        # serialized as {__type: 'bigint', value: '...'} by the bridge.
+        balance_raw = result.get("balance")
+        return BalanceResponse(
+            balance=_bigint_to_str(balance_raw),
+            decimals=int(result.get("decimals", 18)),
+        )
+
+    # ------------------------------------------------------------------
+    # Gateway routing
+    # ------------------------------------------------------------------
+
+    async def resolve_gateway(self, market_address: str, *, timeout: float = 10.0) -> str:
+        """Resolve which gateway serves a given market address."""
+        result = await self._call(
+            "resolveGateway", {"marketAddress": market_address}, timeout=timeout
+        )
+        return str(result)
+
+    # ------------------------------------------------------------------
+    # Internal dispatch
+    # ------------------------------------------------------------------
+
+    async def _call(
+        self,
+        method: str,
+        params: dict[str, Any],
+        *,
+        timeout: float,
+    ) -> Any:
+        """Send a JSON-RPC call to the Node bridge."""
+        if self._auto_start and self._owns_bridge:
+            # Ensure the bridge is running. start() is idempotent.
             try:
-                async with websockets.connect(
-                    ws_url,
-                    additional_headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                    },
-                ) as ws:
-                    # If filtering by market, send a subscribe message.
-                    if market_id is not None:
-                        await ws.send(json.dumps({"action": "subscribe",
-                                                  "market_id": market_id}))
-                    # Reset attempt counter after a successful connection.
-                    attempt = 0
-                    async for raw in ws:
-                        try:
-                            data = json.loads(raw)
-                        except json.JSONDecodeError:
-                            logger.warning(
-                                "ignoring non-JSON ATT event frame: %r",
-                                raw[:200],
-                            )
-                            continue
-                        try:
-                            event = adapter.validate_python(data)
-                        except Exception:
-                            logger.exception("failed to parse ATT event: %r", data)
-                            continue
-                        yield event
-            except (OSError, websockets.WebSocketException) as exc:
-                attempt += 1
-                if attempt >= max_attempts:
-                    raise DelphiAPIError(
-                        f"ATT WebSocket reconnect exhausted after {attempt} attempts: {exc!r}"
-                    ) from exc
-                backoff = min(2 ** attempt, 8)
-                logger.warning(
-                    "ATT WS disconnected (attempt %d/%d); reconnecting in %ds: %r",
-                    attempt, max_attempts, backoff, exc,
-                )
-                import asyncio
+                await self._bridge.start()
+            except BridgeError:
+                raise
+        return await self._bridge.call(method, params, timeout=timeout)
 
-                await asyncio.sleep(backoff)
 
-# Module-level lazy TypeAdapter for the MarketEvent discriminated union.
-# TypeAdapter construction is relatively expensive, so we cache it.
-_EVENT_ADAPTER = None
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-def _get_event_adapter():
-    """Return a cached ``TypeAdapter[MarketEvent]``."""
-    global _EVENT_ADAPTER
-    if _EVENT_ADAPTER is None:
-        from pydantic import TypeAdapter
+def _bigint_to_str(value: Any) -> str:
+    """Convert a bridge-serialized bigint back to a decimal string.
 
-        from pythia_delphi_adapter.models import MarketEvent
-
-        _EVENT_ADAPTER = TypeAdapter(MarketEvent)
-    return _EVENT_ADAPTER
-
-__all__ = [
-    "DelphiClient",
-    "DelphiAPIError",
-    "DelphiAuthError",
-    "DelphiNotFoundError",
-    "DEFAULT_ENDPOINT",
-    "ATT_DOCS_URL",
-]
+    The bridge serializes ``bigint`` as ``{"__type": "bigint", "value": "<dec>"}``
+    for precision. Python's ``int`` is unbounded, but downstream Pythia
+    consumers (risk engine, audit log) prefer the canonical string form.
+    """
+    if value is None:
+        return "0"
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (int, float)):
+        return str(int(value))
+    if isinstance(value, dict) and value.get("__type") == "bigint":
+        return str(value.get("value", "0"))
+    return str(value)

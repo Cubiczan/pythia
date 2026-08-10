@@ -1,0 +1,10 @@
+{
+  "name": "pythia-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pythia — hardened multi-agent trading mesh for Gensyn Delphi information markets",
+  "type": "module",
+  "dependencies": {
+    "@gensyn-ai/gensyn-delphi-sdk": "^2.1.0"
+  }
+}

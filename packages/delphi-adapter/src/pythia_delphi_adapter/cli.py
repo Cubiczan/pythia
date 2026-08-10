@@ -1,18 +1,21 @@
-"""``pythia-delphi`` CLI — one-off inspection + paper-order preview.
+"""``pythia-delphi`` CLI — one-off inspection + quote preview.
 
 Usage::
 
-    pythia-delphi markets list [--limit N] [--status STATUS] [--category CAT]
-    pythia-delphi markets get <market_id>
-    pythia-delphi positions
-    pythia-delphi settlements [--since 24h]
-    pythia-delphi paper-order <market_id> <yes|no> <size_usd> [--limit-price P]
+    pythia-delphi health
+    pythia-delphi markets list [--limit N] [--status STATUS] [--category CAT] [--with-prices]
+    pythia-delphi markets get <market_id> [--with-prices]
+    pythia-delphi positions <wallet>
+    pythia-delphi quote-buy <market_address> <outcome_idx> <shares_out>
+    pythia-delphi balance [--token-address 0x...]
 
-All commands read config from env vars (``DELPHI_API_KEY``,
-``DELPHI_ENDPOINT``) or ``--config <toml>``. They never log the API key.
+All commands read config from environment variables (``DELPHI_NETWORK``,
+``DELPHI_API_ACCESS_KEY``, ``DELPHI_SIGNER_TYPE``, ``WALLET_PRIVATE_KEY``,
+etc.) — see the SDK README for the full list. They never log secrets.
 
-``paper-order`` constructs the exact ``POST /orders`` payload and prints
-it without submitting — useful for sanity-checking before going live.
+The ``quote-*`` and ``balance`` commands require a configured signer
+(either ``WALLET_PRIVATE_KEY`` or CDP credentials) because the SDK needs
+a wallet to resolve the gateway and token addresses.
 """
 
 from __future__ import annotations
@@ -21,217 +24,187 @@ import argparse
 import asyncio
 import json
 import sys
-import uuid
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from pythia_delphi_adapter.client import DelphiClient
 from pythia_delphi_adapter.config import load_config
-from pythia_delphi_adapter.models import MarketCategory, MarketStatus, OrderSide
+from pythia_delphi_adapter.models import MarketStatus
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _parse_since(since: str) -> datetime:
-    """Parse a ``--since`` value like ``24h``, ``30m``, or an ISO-8601 ts."""
-    since = since.strip()
-    if since.endswith("h"):
-        return datetime.now(timezone.utc) - timedelta(hours=int(since[:-1]))
-    if since.endswith("m"):
-        return datetime.now(timezone.utc) - timedelta(minutes=int(since[:-1]))
-    if since.endswith("d"):
-        return datetime.now(timezone.utc) - timedelta(days=int(since[:-1]))
-    # Fall back: try ISO-8601.
-    parsed = datetime.fromisoformat(since)
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed
 
 def _print_json(obj: Any) -> None:
-    """Pretty-print a pydantic model / dict / list as JSON to stdout."""
-    if hasattr(obj, "model_dump_json"):
-        print(obj.model_dump_json(indent=2))
-    elif isinstance(obj, list):
-        items = [
-            (x.model_dump(mode="json") if hasattr(x, "model_dump") else x) for x in obj
-        ]
-        print(json.dumps(items, indent=2, default=str))
-    else:
-        print(json.dumps(obj, indent=2, default=str))
+    """Print a JSON object with indent + sort_keys for readability."""
+    print(json.dumps(obj, indent=2, sort_keys=True, default=str))
 
-def _build_client(args: argparse.Namespace):
-    """Construct a ``DelphiClient`` from CLI args + env / TOML config."""
-    from pythia_delphi_adapter.client import DelphiClient
 
-    cfg = load_config(
-        env_var="DELPHI_API_KEY",
-        toml_path=getattr(args, "config", None),
-    )
-    return DelphiClient(api_key=cfg.api_key, endpoint=cfg.endpoint)
-
-# ---------------------------------------------------------------------------
-# Subcommand implementations
-# ---------------------------------------------------------------------------
-
-async def cmd_markets_list(args: argparse.Namespace) -> int:
-    status: MarketStatus | None = None
-    if args.status:
-        status = MarketStatus(args.status.upper())
-    category: str | None = None
-    if args.category:
-        # Allow both raw string and enum name; validate against known categories.
-        try:
-            category = MarketCategory(args.category.upper()).value
-        except ValueError:
-            category = args.category
-
-    async with _build_client(args) as client:
-        markets = await client.list_markets(
-            status=status, category=category, limit=args.limit
-        )
-        # Print a compact table + the full JSON.
-        if markets:
-            print(
-                f"{'market_id':<24} {'status':<10} {'yes':<6} {'vol_usd':<12} question"
-            )
-            print("-" * 80)
-            for m in markets:
-                print(
-                    f"{m.market_id:<24} {m.status.value:<10} "
-                    f"{m.yes_price:<6.2f} {m.volume_usd:<12,.0f} {m.question[:40]}"
-                )
-            print()
-        _print_json(markets)
-    return 0
-
-async def cmd_markets_get(args: argparse.Namespace) -> int:
-    async with _build_client(args) as client:
-        market = await client.get_market(args.market_id)
-        _print_json(market)
-    return 0
-
-async def cmd_positions(args: argparse.Namespace) -> int:
-    async with _build_client(args) as client:
-        positions = await client.get_positions()
-        _print_json(positions)
-    return 0
-
-async def cmd_settlements(args: argparse.Namespace) -> int:
-    since = _parse_since(args.since) if args.since else None
-    async with _build_client(args) as client:
-        settlements = await client.get_settlements(since=since)
-        _print_json(settlements)
-    return 0
-
-async def cmd_paper_order(args: argparse.Namespace) -> int:
-    """Construct and print the order payload — do NOT submit.
-
-    This is the single most useful command before going live: it shows
-    exactly what would be POSTed to ``/orders``, including the
-    idempotency key and the correlation id.
-    """
-    side = OrderSide(args.side.upper())
-    if args.limit_price is not None and not (0.0 <= args.limit_price <= 1.0):
-        print(
-            f"error: --limit-price must be in [0.0, 1.0], got {args.limit_price}",
-            file=sys.stderr,
-        )
-        return 2
-
-    correlation_id = str(uuid.uuid4())
-    payload: dict[str, Any] = {
-        "endpoint": "POST /orders",
-        "market_id": args.market_id,
-        "side": side.value,
-        "size_usd": float(args.size_usd),
-        "limit_price": args.limit_price,
-        "correlation_id": correlation_id,
-        "idempotency_key": correlation_id,
-        "headers": {
-            "Idempotency-Key": correlation_id,
-            "Authorization": "Bearer <redacted>",
-        },
-        "_note": "PAPER — not submitted. Implement --submit in pythia-executor to send live.",
+def _market_to_dict(market: Any) -> dict[str, Any]:
+    """Convert a Market model to a compact dict for CLI output."""
+    return {
+        "market_address": market.market_address,
+        "app_market_id": market.app_market_id,
+        "market_url": market.market_url,
+        "question": market.question,
+        "category": market.category,
+        "status": market.status.value if hasattr(market.status, "value") else str(market.status),
+        "outcomes": market.outcomes,
+        "spot_prices": market.spot_prices,
+        "spot_implied_probabilities": market.spot_implied_probabilities,
+        "settles_at": market.settles_at.isoformat() if market.settles_at else None,
     }
-    _print_json(payload)
-    return 0
+
 
 # ---------------------------------------------------------------------------
-# Argument parser
+# Command handlers
+# ---------------------------------------------------------------------------
+
+async def cmd_health(client: DelphiClient, args: argparse.Namespace) -> None:
+    health = await client.health()
+    _print_json({"status": health.status})
+
+
+async def cmd_markets_list(client: DelphiClient, args: argparse.Namespace) -> None:
+    markets = await client.list_markets(
+        limit=args.limit,
+        status=args.status,
+        category=args.category,
+        prices_and_implied_probabilities=args.with_prices,
+    )
+    print(json.dumps([_market_to_dict(m) for m in markets], indent=2, default=str))
+
+
+async def cmd_markets_get(client: DelphiClient, args: argparse.Namespace) -> None:
+    market = await client.get_market(
+        args.market_id,
+        prices_and_implied_probabilities=args.with_prices,
+    )
+    _print_json(_market_to_dict(market))
+
+
+async def cmd_positions(client: DelphiClient, args: argparse.Namespace) -> None:
+    positions = await client.list_positions(args.wallet)
+    out = []
+    for p in positions:
+        out.append({
+            "position_id": p.position_id,
+            "market_address": p.market_address,
+            "outcome_idx": p.outcome_idx,
+            "shares": p.shares,
+            "redeemed_or_liquidated": p.redeemed_or_liquidated,
+            "market_status": p.market_status.value if hasattr(p.market_status, "value") else str(p.market_status),
+        })
+    _print_json(out)
+
+
+async def cmd_quote_buy(client: DelphiClient, args: argparse.Namespace) -> None:
+    quote = await client.quote_buy(
+        market_address=args.market_address,
+        outcome_idx=args.outcome_idx,
+        shares_out=args.shares_out,
+    )
+    _print_json({"tokens_in": quote.tokens_in})
+
+
+async def cmd_balance(client: DelphiClient, args: argparse.Namespace) -> None:
+    if args.token_address:
+        bal = await client.get_erc20_balance(token_address=args.token_address)
+        _print_json({"balance": bal.balance, "decimals": bal.decimals})
+    else:
+        eth = await client.get_eth_balance()
+        _print_json({"eth_balance": eth})
+
+
+# ---------------------------------------------------------------------------
+# Argparse wiring
 # ---------------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pythia-delphi",
-        description="Inspect Delphi markets, positions, settlements, and preview orders.",
+        description="CLI for the Gensyn Delphi SDK (via pythia-delphi-adapter)",
     )
     parser.add_argument(
         "--config",
+        help="Path to a TOML config file (overrides env vars)",
         default=None,
-        help="Path to a TOML config file (default: env vars only).",
     )
+    parser.add_argument(
+        "--network",
+        help="Delphi network: testnet | mainnet | competition-testnet",
+        default=None,
+    )
+
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # markets group: `markets list` and `markets get`
-    p_markets = sub.add_parser("markets", help="Market inspection commands.")
-    markets_sub = p_markets.add_subparsers(dest="markets_command", required=True)
+    # health
+    sub.add_parser("health", help="Check REST API health")
 
-    p_list = markets_sub.add_parser("list", help="List markets (default: open).")
-    p_list.add_argument("--limit", type=int, default=20)
-    p_list.add_argument("--status", default=None, help="OPEN | CLOSED | SETTLED | CANCELLED")
-    p_list.add_argument(
-        "--category",
-        default=None,
-        help="POLITICS | ECONOMICS | SPORTS | CRYPTO | SUBJECTIVE",
-    )
-    p_list.set_defaults(func=cmd_markets_list)
+    # markets list
+    p_list = sub.add_parser("markets list", help="List markets")
+    p_list.add_argument("--limit", type=int, default=10)
+    p_list.add_argument("--status", choices=[s.value for s in MarketStatus], default=None)
+    p_list.add_argument("--category", default=None)
+    p_list.add_argument("--with-prices", action="store_true", help="Fetch on-chain spot prices")
 
-    p_get = markets_sub.add_parser("get", help="Show one market's detail.")
-    p_get.add_argument("market_id")
-    p_get.set_defaults(func=cmd_markets_get)
+    # markets get
+    p_get = sub.add_parser("markets get", help="Get a single market")
+    p_get.add_argument("market_id", help="Market app UUID or contract address")
+    p_get.add_argument("--with-prices", action="store_true")
 
     # positions
-    p_pos = sub.add_parser("positions", help="Show current open positions.")
-    p_pos.set_defaults(func=cmd_positions)
+    p_pos = sub.add_parser("positions", help="List positions for a wallet")
+    p_pos.add_argument("wallet", help="Wallet address (0x...)")
 
-    # settlements
-    p_set = sub.add_parser("settlements", help="Show recent AI-arbiter settlements.")
-    p_set.add_argument(
-        "--since", default="24h", help="Window: e.g. 24h, 30m, 2d, or ISO-8601."
-    )
-    p_set.set_defaults(func=cmd_settlements)
+    # quote-buy
+    p_qb = sub.add_parser("quote-buy", help="Quote collateral needed to buy shares")
+    p_qb.add_argument("market_address", help="Market proxy address (0x...)")
+    p_qb.add_argument("outcome_idx", type=int, help="0-based outcome index")
+    p_qb.add_argument("shares_out", help="Number of shares (18-decimal string, e.g. 1000000000000000000)")
 
-    # paper-order
-    p_paper = sub.add_parser(
-        "paper-order", help="Preview an order without submitting it."
-    )
-    p_paper.add_argument("market_id")
-    p_paper.add_argument("side", choices=["yes", "no", "YES", "NO"])
-    p_paper.add_argument("size_usd", type=float)
-    p_paper.add_argument(
-        "--limit-price", type=float, default=None, help="Limit price 0..1."
-    )
-    p_paper.set_defaults(func=cmd_paper_order)
+    # balance
+    p_bal = sub.add_parser("balance", help="Show ETH or ERC-20 balance")
+    p_bal.add_argument("--token-address", default=None, help="ERC-20 token address (default: network token)")
 
     return parser
 
-def main(argv: list[str] | None = None) -> int:
+
+COMMAND_HANDLERS = {
+    "health": cmd_health,
+    "markets list": cmd_markets_list,
+    "markets get": cmd_markets_get,
+    "positions": cmd_positions,
+    "quote-buy": cmd_quote_buy,
+    "balance": cmd_balance,
+}
+
+
+async def amain() -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args()
 
-    func = getattr(args, "func", None)
-    if func is None:
-        parser.print_help()
-        return 1
-
+    # Load config (env vars + optional TOML)
     try:
-        return asyncio.run(func(args))
-    except KeyboardInterrupt:
-        print("\ninterrupted", file=sys.stderr)
-        return 130
-    except Exception as exc:  # noqa: BLE001
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
+        env_config = load_config(toml_path=args.config, require_key=False)
+    except ValueError as exc:
+        print(f"Config error: {exc}", file=sys.stderr)
+        return 2
+
+    network = args.network or env_config.network
+    env = env_config.to_env_dict()
+    if network:
+        env["DELPHI_NETWORK"] = network
+
+    async with DelphiClient(env=env) as client:
+        handler = COMMAND_HANDLERS[args.command]
+        try:
+            await handler(client, args)
+        except Exception as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+    return 0
+
+
+def main() -> None:
+    sys.exit(asyncio.run(amain()))
+
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

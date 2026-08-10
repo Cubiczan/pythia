@@ -1,275 +1,316 @@
-"""Smoke tests for ``DelphiClient`` using ``httpx.MockTransport``.
+"""Tests for the Bridge subprocess manager and DelphiClient.
 
-These tests never touch the real ATT. They assert:
+These tests use a fake bridge process (a small Python script that mimics
+bridge.mjs's JSON-RPC protocol) so they don't require the actual Node.js
+SDK to be installed. This keeps the test suite hermetic.
 
-- ``list_markets`` parses a representative ATT response into typed ``Market`` objects.
-- ``place_order`` includes the ``Idempotency-Key`` header and parses the receipt.
-- ``get_settlements`` filters by ``since`` and parses the settlement.
-- ``cancel_order`` returns ``True`` on a 200 acknowledgement.
-- Error mapping: 401 → ``DelphiAuthError``, 404 → ``DelphiNotFoundError``.
+For integration tests that exercise the real SDK, see
+``test_integration.py`` (skipped unless ``PYTHIA_INTEGRATION=1`` is set).
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
-from datetime import datetime, timezone
+import os
+import sys
+import textwrap
+from pathlib import Path
+from typing import Any
 
-import httpx
 import pytest
 
-from pythia_delphi_adapter.client import (
-    DelphiAPIError,
-    DelphiAuthError,
-    DelphiClient,
-    DelphiNotFoundError,
-)
-from pythia_delphi_adapter.models import MarketStatus, OrderSide
+from pythia_delphi_adapter.bridge import Bridge, BRIDGE_READY_TIMEOUT_SEC
+from pythia_delphi_adapter.client import DelphiClient, _bigint_to_str
+from pythia_delphi_adapter.errors import BridgeError, BridgeNotReadyError, DelphiAPIError
+from pythia_delphi_adapter.models import MarketStatus
+
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Fake bridge process — a Python script that speaks the JSON-RPC protocol
 # ---------------------------------------------------------------------------
 
-def _market_payload(
-    market_id: str = "dphi_01JABC",
-    *,
-    status: str = "OPEN",
-    yes_price: float = 0.62,
-    category: str = "CRYPTO",
-) -> dict:
-    return {
-        "market_id": market_id,
-        "question": "Will BTC close above $100k on 2026-08-31?",
-        "category": category,
-        "status": status,
-        "yes_price": yes_price,
-        "no_price": round(1.0 - yes_price, 4),
-        "volume_usd": 12345.67,
-        "liquidity_usd": 987.65,
-        "created_at": "2026-07-15T10:00:00Z",
-        "closes_at": "2026-08-31T23:59:59Z",
-        "settlement_at": None,
-        "arbiter_model": "gensyn-arbiter-v1",  # VERIFY: real field name.
+FAKE_BRIDGE_PY = textwrap.dedent("""
+    import sys, json, time
+
+    # Signal ready
+    sys.stderr.write("[bridge] ready\\n")
+    sys.stderr.flush()
+
+    # Pre-canned responses keyed by method name
+    RESPONSES = {
+        "health": {"status": "ok"},
+        "listMarkets": {"markets": []},
+        "getMarket": {"id": "0xabc", "appMarketId": "uuid-1", "marketUrl": "https://example",
+                      "status": "open", "category": "crypto", "deployer": "0xfeed",
+                      "implementation": "0ximp", "metadataUri": "ipfs://x",
+                      "metadataUriContentHash": "0xh", "dataSources": None,
+                      "createdAt": "2026-08-01T00:00:00Z", "fetchedAt": None,
+                      "fetchResponseStatus": None, "resolvesAt": None, "settledAt": None,
+                      "settlesAt": None, "winningOutcomeIdx": None, "tradingFee": None,
+                      "proof": None, "error": None, "verifiable": True,
+                      "metadata": {"question": "Test?", "outcomes": ["YES", "NO"]}},
+        "getMarketStatus": "open",
+        "quoteBuy": {"tokensIn": "650000000000000000"},
+        "buyShares": {"transactionHash": "0xdeadbeef"},
+        "getEthBalance": {"__type": "bigint", "value": "1000000000000000000"},
+        "getErc20BalanceWithDecimals": {"balance": {"__type": "bigint", "value": "5000000000000000000"}, "decimals": 18},
     }
 
-def _settlement_payload(market_id: str = "dphi_01JABC") -> dict:
-    return {
-        "market_id": market_id,
-        "outcome": "YES",
-        "arbiter_model": "gensyn-arbiter-v1",
-        "settlement_price": 1.0,
-        "resolved_at": "2026-09-01T00:00:30Z",
-        "evidence_hashes": ["bafyabc123", "bafydef456"],
-    }
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        rid = req.get("id")
+        method = req.get("method")
+        if method in RESPONSES:
+            resp = {"jsonrpc": "2.0", "id": rid, "result": RESPONSES[method]}
+        elif method == "errorMethod":
+            resp = {"jsonrpc": "2.0", "id": rid,
+                    "error": {"code": -32000, "message": "SDK error",
+                              "data": {"shortMessage": "reverted"}}}
+        else:
+            resp = {"jsonrpc": "2.0", "id": rid,
+                    "error": {"code": -32601, "message": f"Method not found: {method}"}}
+        sys.stdout.write(json.dumps(resp) + "\\n")
+        sys.stdout.flush()
+""")
 
-def _make_client(handler) -> DelphiClient:
-    """Build a ``DelphiClient`` backed by a MockTransport handler."""
-    transport = httpx.MockTransport(handler)
-    http = httpx.AsyncClient(
-        base_url="https://api.delphi.gensyn.ai",
-        transport=transport,
-        headers={
-            "Authorization": "Bearer test-key",
-            "X-Delphi-Api-Key": "test-key",
-            "User-Agent": "pythia-delphi-adapter/test",
-            "Accept": "application/json",
-        },
+
+@pytest.fixture
+def fake_bridge_script(tmp_path: Path) -> Path:
+    """Write the fake bridge to a .py file and return its path."""
+    script = tmp_path / "fake_bridge.py"
+    script.write_text(FAKE_BRIDGE_PY)
+    return script
+
+
+@pytest.fixture
+async def bridge_with_fake(fake_bridge_script: Path) -> Bridge:
+    """A Bridge instance that runs the fake Python bridge instead of node."""
+    # We can't use bridge.mjs — instead, run python with the fake script.
+    # Trick: override the node binary and bridge script to use python.
+    b = Bridge(
+        node_bin=sys.executable,
+        bridge_script=fake_bridge_script,
+        ready_timeout=5.0,
+        default_call_timeout=5.0,
     )
-    # http_client injected → client won't own/close it (we manage via `async with`).
-    return DelphiClient(
-        api_key="test-key",
-        endpoint="https://api.delphi.gensyn.ai",
-        http_client=http,
-    )
+    await b.start()
+    try:
+        yield b
+    finally:
+        await b.stop()
+
 
 # ---------------------------------------------------------------------------
-# Tests
+# _bigint_to_str helper
 # ---------------------------------------------------------------------------
 
-@pytest.mark.asyncio
-async def test_list_markets_parses_response() -> None:
-    """list_markets should parse the ATT response into typed Market objects."""
+class TestBigintToStr:
+    def test_none(self):
+        assert _bigint_to_str(None) == "0"
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/markets"
-        assert request.url.params.get("limit") == "50"
-        assert request.url.params.get("status") == "OPEN"
-        assert request.url.params.get("category") == "CRYPTO"
-        return httpx.Response(
-            200,
-            json={"markets": [_market_payload(), _market_payload("dphi_02XYZ", yes_price=0.30)]},
+    def test_string(self):
+        assert _bigint_to_str("123") == "123"
+
+    def test_int(self):
+        assert _bigint_to_str(456) == "456"
+
+    def test_bigint_marker(self):
+        assert _bigint_to_str({"__type": "bigint", "value": "999"}) == "999"
+
+    def test_float(self):
+        assert _bigint_to_str(12.0) == "12"
+
+
+# ---------------------------------------------------------------------------
+# Bridge lifecycle
+# ---------------------------------------------------------------------------
+
+class TestBridgeLifecycle:
+    async def test_start_and_stop(self, bridge_with_fake: Bridge):
+        b = bridge_with_fake
+        assert b._proc is not None
+        assert b._proc.returncode is None  # still running
+        # Bridge is already started by the fixture
+
+    async def test_start_is_idempotent(self, bridge_with_fake: Bridge):
+        b = bridge_with_fake
+        # Calling start again should be a no-op
+        await b.start()
+        assert b._proc is not None
+        assert b._proc.returncode is None
+
+    async def test_stop_kills_process(self, fake_bridge_script: Path):
+        b = Bridge(
+            node_bin=sys.executable,
+            bridge_script=fake_bridge_script,
+            ready_timeout=5.0,
         )
+        await b.start()
+        proc = b._proc
+        assert proc is not None
+        await b.stop()
+        # Process should have exited
+        assert proc.returncode is not None
 
-    async with _make_client(handler) as client:
-        markets = await client.list_markets(
-            status=MarketStatus.OPEN, category="CRYPTO", limit=50
+    async def test_start_fails_on_missing_script(self, tmp_path: Path):
+        missing = tmp_path / "does_not_exist.py"
+        b = Bridge(
+            node_bin=sys.executable,
+            bridge_script=missing,
+            ready_timeout=1.0,
         )
+        with pytest.raises(BridgeError, match="Bridge script not found"):
+            await b.start()
 
-    assert len(markets) == 2
-    assert markets[0].market_id == "dphi_01JABC"
-    assert markets[0].status == MarketStatus.OPEN
-    assert markets[0].yes_price == pytest.approx(0.62)
-    assert markets[0].arbiter_model == "gensyn-arbiter-v1"
-    assert markets[0].created_at.tzinfo is not None  # parsed as UTC-aware
-
-@pytest.mark.asyncio
-async def test_list_markets_accepts_bare_list_response() -> None:
-    """ATT may return a bare list instead of {'markets': [...]}."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=[_market_payload()])
-
-    async with _make_client(handler) as client:
-        markets = await client.list_markets()
-
-    assert len(markets) == 1
-    assert markets[0].market_id == "dphi_01JABC"
-
-@pytest.mark.asyncio
-async def test_place_order_includes_idempotency_header() -> None:
-    """place_order must send Idempotency-Key and parse the receipt."""
-
-    captured: dict[str, str] = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.method == "POST"
-        assert request.url.path == "/orders"
-        captured["idempotency_key"] = request.headers.get("Idempotency-Key", "")
-        captured["authorization"] = request.headers.get("Authorization", "")
-        body = json.loads(request.content)
-        assert body["market_id"] == "dphi_01JABC"
-        assert body["side"] == "YES"
-        assert body["size_usd"] == 25.0
-        assert body["limit_price"] == 0.62
-        return httpx.Response(
-            200,
-            json={
-                "market_id": "dphi_01JABC",
-                "side": "YES",
-                "size_usd": 25.0,
-                "fill_price": 0.62,
-                "att_order_id": "att_ord_01J",
-                "status": "FILLED",
-                "signed_by": "key_0xABCD",
-                "timestamp": "2026-07-15T12:00:00Z",
-            },
+    async def test_start_times_out_on_no_ready_signal(self, tmp_path: Path):
+        # A script that never prints "[bridge] ready"
+        bad_script = tmp_path / "bad_bridge.py"
+        bad_script.write_text("import sys; sys.stderr.write('nothing\\n'); sys.stderr.flush(); sys.stdin.read()")
+        b = Bridge(
+            node_bin=sys.executable,
+            bridge_script=bad_script,
+            ready_timeout=1.5,
         )
+        with pytest.raises(BridgeError, match="did not signal ready"):
+            await b.start()
 
-    async with _make_client(handler) as client:
-        receipt = await client.place_order(
-            market_id="dphi_01JABC",
-            side=OrderSide.YES,
-            size_usd=25.0,
-            limit_price=0.62,
-            correlation_id="corr-123",
+
+# ---------------------------------------------------------------------------
+# Bridge.call
+# ---------------------------------------------------------------------------
+
+class TestBridgeCall:
+    async def test_health(self, bridge_with_fake: Bridge):
+        result = await bridge_with_fake.call("health", {})
+        assert result == {"status": "ok"}
+
+    async def test_list_markets(self, bridge_with_fake: Bridge):
+        result = await bridge_with_fake.call("listMarkets", {"limit": 10})
+        assert result == {"markets": []}
+
+    async def test_get_market(self, bridge_with_fake: Bridge):
+        result = await bridge_with_fake.call("getMarket", {"id": "0xabc"})
+        assert result["id"] == "0xabc"
+        assert result["status"] == "open"
+
+    async def test_get_market_status(self, bridge_with_fake: Bridge):
+        result = await bridge_with_fake.call("getMarketStatus", {"marketAddress": "0xabc"})
+        assert result == "open"
+
+    async def test_quote_buy(self, bridge_with_fake: Bridge):
+        result = await bridge_with_fake.call("quoteBuy", {
+            "marketAddress": "0xabc", "outcomeIdx": 0, "sharesOut": "1000000000000000000",
+        })
+        assert result == {"tokensIn": "650000000000000000"}
+
+    async def test_buy_shares(self, bridge_with_fake: Bridge):
+        result = await bridge_with_fake.call("buyShares", {
+            "marketAddress": "0xabc", "outcomeIdx": 0,
+            "sharesOut": "1000000000000000000", "maxTokensIn": "700000000000000000",
+        })
+        assert result == {"transactionHash": "0xdeadbeef"}
+
+    async def test_error_propagation(self, bridge_with_fake: Bridge):
+        with pytest.raises(DelphiAPIError) as exc_info:
+            await bridge_with_fake.call("errorMethod", {})
+        assert "SDK error" in str(exc_info.value)
+        assert exc_info.value.code == -32000
+        assert exc_info.value.data["shortMessage"] == "reverted"
+
+    async def test_method_not_found(self, bridge_with_fake: Bridge):
+        with pytest.raises(DelphiAPIError, match="Method not found: nonexistent"):
+            await bridge_with_fake.call("nonexistent", {})
+
+    async def test_call_before_start_raises(self, fake_bridge_script: Path):
+        b = Bridge(
+            node_bin=sys.executable,
+            bridge_script=fake_bridge_script,
+            ready_timeout=5.0,
         )
+        with pytest.raises(BridgeNotReadyError):
+            await b.call("health", {})
 
-    # Idempotency key should equal the correlation id.
-    assert captured["idempotency_key"] == "corr-123"
-    assert captured["authorization"] == "Bearer test-key"
+    async def test_bigint_serialization(self, bridge_with_fake: Bridge):
+        # The fake bridge returns bigint markers for getEthBalance
+        result = await bridge_with_fake.call("getEthBalance", {})
+        assert result == {"__type": "bigint", "value": "1000000000000000000"}
 
-    assert receipt.att_order_id == "att_ord_01J"
-    assert receipt.status.value == "FILLED"
-    assert receipt.fill_price == pytest.approx(0.62)
-    assert receipt.signed_by == "key_0xABCD"
-    assert receipt.timestamp.tzinfo is not None
 
-@pytest.mark.asyncio
-async def test_place_order_rejects_invalid_size() -> None:
-    """place_order should reject non-positive sizes client-side."""
+# ---------------------------------------------------------------------------
+# DelphiClient (uses fake bridge)
+# ---------------------------------------------------------------------------
 
-    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
-        raise AssertionError("should not have been called")
+class TestDelphiClient:
+    async def test_health(self, bridge_with_fake: Bridge):
+        client = DelphiClient(bridge=bridge_with_fake, auto_start=False)
+        health = await client.health()
+        assert health.status == "ok"
 
-    async with _make_client(handler) as client:
-        with pytest.raises(ValueError, match="size_usd"):
-            await client.place_order(
-                market_id="dphi_01JABC",
-                side=OrderSide.YES,
-                size_usd=0.0,
-            )
+    async def test_list_markets(self, bridge_with_fake: Bridge):
+        client = DelphiClient(bridge=bridge_with_fake, auto_start=False)
+        markets = await client.list_markets(limit=10)
+        assert markets == []
 
-@pytest.mark.asyncio
-async def test_get_settlements_filters_by_since() -> None:
-    """get_settlements should pass the `since` cursor through and parse results."""
+    async def test_get_market(self, bridge_with_fake: Bridge):
+        client = DelphiClient(bridge=bridge_with_fake, auto_start=False)
+        market = await client.get_market("0xabc")
+        assert market.market_address == "0xabc"
+        assert market.status == MarketStatus.OPEN
+        assert market.outcomes == ["YES", "NO"]
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/settlements"
-        assert request.url.params.get("since") is not None
-        return httpx.Response(
-            200,
-            json={"settlements": [_settlement_payload()]},
+    async def test_quote_buy(self, bridge_with_fake: Bridge):
+        client = DelphiClient(bridge=bridge_with_fake, auto_start=False)
+        quote = await client.quote_buy(
+            market_address="0xabc",
+            outcome_idx=0,
+            shares_out="1000000000000000000",
         )
+        assert quote.tokens_in == "650000000000000000"
 
-    since = datetime(2026, 8, 1, tzinfo=timezone.utc)
-    async with _make_client(handler) as client:
-        settlements = await client.get_settlements(since=since)
+    async def test_buy_shares_returns_receipt(self, bridge_with_fake: Bridge):
+        client = DelphiClient(bridge=bridge_with_fake, auto_start=False)
+        receipt = await client.buy_shares(
+            market_address="0xabc",
+            outcome_idx=0,
+            shares_out="1000000000000000000",
+            max_tokens_in="700000000000000000",
+        )
+        assert receipt.transaction_hash == "0xdeadbeef"
+        assert receipt.side == "buy"
+        assert receipt.market_address == "0xabc"
+        assert receipt.outcome_idx == 0
 
-    assert len(settlements) == 1
-    s = settlements[0]
-    assert s.market_id == "dphi_01JABC"
-    assert s.outcome.value == "YES"
-    assert s.arbiter_model == "gensyn-arbiter-v1"
-    assert s.settlement_price == 1.0
-    assert s.evidence_hashes == ["bafyabc123", "bafydef456"]
-    assert s.resolved_at.tzinfo is not None
+    async def test_get_eth_balance(self, bridge_with_fake: Bridge):
+        client = DelphiClient(bridge=bridge_with_fake, auto_start=False)
+        balance = await client.get_eth_balance()
+        assert balance == "1000000000000000000"
 
-@pytest.mark.asyncio
-async def test_cancel_order_returns_true_on_200() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.method == "DELETE"
-        assert request.url.path == "/orders/att_ord_01J"
-        return httpx.Response(200, json={"cancelled": True})
+    async def test_get_erc20_balance(self, bridge_with_fake: Bridge):
+        client = DelphiClient(bridge=bridge_with_fake, auto_start=False)
+        bal = await client.get_erc20_balance()
+        assert bal.balance == "5000000000000000000"
+        assert bal.decimals == 18
 
-    async with _make_client(handler) as client:
-        result = await client.cancel_order("att_ord_01J")
-
-    assert result is True
-
-@pytest.mark.asyncio
-async def test_auth_error_on_401() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(401, json={"error": "invalid api key"})
-
-    async with _make_client(handler) as client:
-        with pytest.raises(DelphiAuthError):
-            await client.get_market("dphi_01JABC")
-
-@pytest.mark.asyncio
-async def test_not_found_error_on_404() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(404, json={"error": "market not found"})
-
-    async with _make_client(handler) as client:
-        with pytest.raises(DelphiNotFoundError):
-            await client.get_market("dphi_unknown")
-
-@pytest.mark.asyncio
-async def test_generic_api_error_on_500() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(500, text="internal server error")
-
-    async with _make_client(handler) as client:
-        # 500 is retried 3x then re-raised as DelphiAPIError.
+    async def test_error_propagation(self, bridge_with_fake: Bridge):
+        client = DelphiClient(bridge=bridge_with_fake, auto_start=False)
+        # The fake bridge returns an error for "errorMethod"
         with pytest.raises(DelphiAPIError):
-            await client.get_market("dphi_01JABC")
+            await client._call("errorMethod", {}, timeout=5.0)
 
-@pytest.mark.asyncio
-async def test_get_orderbook_parses_response() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/markets/dphi_01JABC/orderbook"
-        return httpx.Response(
-            200,
-            json={
-                "market_id": "dphi_01JABC",
-                "bids": [{"price": 0.60, "size_usd": 100.0}],
-                "asks": [{"price": 0.64, "size_usd": 50.0}],
-            },
+    async def test_context_manager(self, fake_bridge_script: Path):
+        # When the client owns the bridge, async with should start/stop it
+        b = Bridge(
+            node_bin=sys.executable,
+            bridge_script=fake_bridge_script,
+            ready_timeout=5.0,
         )
-
-    async with _make_client(handler) as client:
-        book = await client.get_orderbook("dphi_01JABC")
-
-    assert book.market_id == "dphi_01JABC"
-    assert len(book.bids) == 1
-    assert book.bids[0].price == pytest.approx(0.60)
-    assert len(book.asks) == 1
+        async with DelphiClient(bridge=b) as client:
+            health = await client.health()
+            assert health.status == "ok"
